@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <regex.h>
 #include "config.h"
+#include "mkpath.h"
 #include "util.h"
 
 static int create_dev(const char *path);
@@ -117,7 +118,7 @@ create_dev(const char *path)
 			case '=':
 				if (Rules[i].path[strlen(Rules[i].path) - 1] == '/') {
 					snprintf(devpath, sizeof(devpath), "/dev/%s", &Rules[i].path[1]);
-					if (mkdir(devpath, 0755) < 0)
+					if (mkpath(devpath, 0755) < 0)
 						eprintf("mkdir %s:", devpath);
 					strcat(devpath, devname);
 				} else {
