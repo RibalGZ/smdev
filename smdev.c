@@ -133,7 +133,7 @@ create_dev(const char *path)
 		if (ret < 0)
 			eprintf("chown %s:", devname);
 
-		/* Create the symlinks */
+		/* Create symlinks */
 		if (Rule->path && Rule->path[0] == '>') {
 			snprintf(buf, sizeof(buf), "%s%s", &Rule->path[1], devname);
 			if (symlink(buf, origdevname))
@@ -141,12 +141,11 @@ create_dev(const char *path)
 					origdevname, buf);
 		}
 
-		/* Export the needed environment */
 		snprintf(buf, sizeof(buf), "SMDEV=%s", devname);
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
-		/* Run the command hooks for this rule */
+		/* Run command hooks for this rule */
 		if (Rule->cmd) {
 			switch (Rule->cmd[0]) {
 			case '@':
