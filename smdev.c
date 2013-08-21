@@ -14,8 +14,6 @@
 #include "config.h"
 #include "util.h"
 
-static int devtomajmin(const char *path, int *maj, int *min);
-static int devtype(const char *majmin);
 static int create_dev(const char *path);
 static void sysrecurse(const char *path);
 
@@ -44,44 +42,6 @@ main(int argc, char *argv[])
 	recurse("/sys/devices", sysrecurse);
 
 	return 0;
-}
-
-/* Example `path' is /sys/devices/virtual/tty/tty0/dev */
-static int
-devtomajmin(const char *path, int *maj, int *min)
-{
-	char buf[BUFSIZ];
-	int fd;
-	ssize_t n;
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		eprintf("open %s:", path);
-	n = read(fd, buf, sizeof(buf) - 1);
-	close(fd);
-	if (n < 0)
-		eprintf("%s: read error:", path);
-	if (!n)
-		return -1;
-	if (buf[n - 1] == '\n')
-		buf[n - 1] = '\0';
-	buf[n] = '\0';
-	sscanf(buf, "%d:%d", maj, min);
-	return 0;
-}
-
-static int
-devtype(const char *majmin)
-{
-	char path[PATH_MAX];
-
-	snprintf(path, sizeof(path), "/sys/dev/block/%s", majmin);
-	if (!access(path, F_OK))
-		return S_IFBLK;
-	snprintf(path, sizeof(path), "/sys/dev/char/%s", majmin);
-	if (!access(path, F_OK))
-		return S_IFCHR;
-	return -1;
 }
 
 static int

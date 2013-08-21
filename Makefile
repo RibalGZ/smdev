@@ -6,6 +6,7 @@ include config.mk
 LIB = \
 	util/agetcwd.o      \
 	util/apathmax.o     \
+	util/dev.o          \
 	util/eprintf.o      \
 	util/estrtol.o      \
 	util/recurse.o
