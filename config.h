@@ -22,5 +22,5 @@ struct Rule {
         { "vcsa*[0-9]*","root", "tty",   0660, NULL, NULL                   },
         { "sd[a-z].*",  "root", "disk",  0660, NULL, NULL                   },
         { "sr[0-9]*",   "root", "cdrom", 0660, NULL, "@ln -sf $SMDEV cdrom" },
-        { ".*",         "root", "root",  0777, NULL, NULL                   },
+        { ".*",         "root", "root",  0660, NULL, NULL                   },
 };
