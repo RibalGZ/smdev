@@ -148,13 +148,11 @@ create_dev(const char *path)
 		/* Run command hooks for this rule */
 		if (Rule->cmd) {
 			switch (Rule->cmd[0]) {
+			case '*':
 			case '@':
 				system(&Rule->cmd[1]);
 				break;
 			case '$':
-			case '*':
-				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
-					Rule->cmd, Rule->devregex);
 				break;
 			default:
 				eprintf("Invalid command '%s'\n", Rule->cmd);
