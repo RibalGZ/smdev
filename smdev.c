@@ -113,8 +113,10 @@ create_dev(const char *path)
 			case '=':
 				if (Rule->path[strlen(Rule->path) - 1] == '/') {
 					snprintf(devpath, sizeof(devpath), "/dev/%s", &Rule->path[1]);
+					umask(022);
 					if (mkpath(devpath, 0755) < 0)
 						eprintf("mkdir %s:", devpath);
+					umask(0);
 					strcat(devpath, devname);
 				} else {
 					snprintf(devpath, sizeof(devpath),
