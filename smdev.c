@@ -15,6 +15,7 @@
 #include "mkpath.h"
 #include "util.h"
 
+static int matchrule(const struct Rule *Rule, const char *devname);
 static int create_dev(const char *path);
 static void sysrecurse(const char *path);
 
@@ -47,15 +48,32 @@ main(int argc, char *argv[])
 }
 
 static int
-create_dev(const char *path)
+matchrule(const struct Rule *Rule, const char *devname)
 {
-	struct passwd *pw;
-	struct group *gr;
 	regex_t match;
 	regmatch_t off;
-	char *regex;
+	int ret;
+
+	ret = regcomp(&match, Rule->devregex, REG_EXTENDED);
+	if (ret < 0)
+		eprintf("regcomp:");
+
+	ret = regexec(&match, devname, 1, &off, 0);
+	regfree(&match);
+
+	if (ret || off.rm_so || off.rm_eo != strlen(devname))
+		return -1;
+	return 0;
+}
+
+static int
+create_dev(const char *path)
+{
+	struct Rule *Rule;
+	struct passwd *pw;
+	struct group *gr;
 	char buf[64], *p;
-	char tmppath[PATH_MAX], devpath[PATH_MAX], *dev;
+	char tmppath[PATH_MAX], devpath[PATH_MAX];
 	char *devname;
 	int maj, min, type;
 	int i, ret;
@@ -84,72 +102,58 @@ create_dev(const char *path)
 	}
 
 	for (i = 0; i < LEN(Rules); i++) {
-		regex = strdup(Rules[i].devregex);
-		if (!regex)
-			eprintf("strdup:");
+		Rule = &Rules[i];
 
-		ret = regcomp(&match, regex, REG_EXTENDED);
-		if (ret < 0)
-			eprintf("regcomp:");
-
-		ret = regexec(&match, devname, 1, &off, 0);
-		regfree(&match);
-		free(regex);
-
-		if (ret || off.rm_so || off.rm_eo != strlen(devname))
+		if (matchrule(Rule, devname) < 0)
 			continue;
 
-		if (Rules[i].cmd) {
-			switch (Rules[i].cmd[0]) {
-			case '@':
-			case '$':
-			case '*':
-				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
-					Rules[i].cmd, Rules[i].devregex);
-				break;
-			default:
-				eprintf("Invalid command '%s'\n", Rules[i].cmd);
-			}
-		}
-
-		dev = devpath;
-		if (Rules[i].path) {
-			switch (Rules[i].path[0]) {
+		if (Rule->path) {
+			switch (Rule->path[0]) {
 			case '=':
-				if (Rules[i].path[strlen(Rules[i].path) - 1] == '/') {
-					snprintf(devpath, sizeof(devpath), "/dev/%s", &Rules[i].path[1]);
+				if (Rule->path[strlen(Rule->path) - 1] == '/') {
+					snprintf(devpath, sizeof(devpath), "/dev/%s", &Rule->path[1]);
 					if (mkpath(devpath, 0755) < 0)
 						eprintf("mkdir %s:", devpath);
 					strcat(devpath, devname);
 				} else {
 					snprintf(devpath, sizeof(devpath),
-						 "/dev/%s", &Rules[i].path[1]);
+						 "/dev/%s", &Rule->path[1]);
 				}
 				break;
 			case '>':
 				fprintf(stderr, "Unsupported path '%s' for target '%s'\n",
-					Rules[i].path, Rules[i].devregex);
+					Rule->path, Rule->devregex);
 				break;
 			default:
-				eprintf("Invalid path '%s'\n", Rules[i].path);
+				eprintf("Invalid path '%s'\n", Rule->path);
 			}
 		}
 
-		ret = mknod(dev, Rules[i].mode | type, makedev(maj, min));
+		ret = mknod(devpath, Rules[i].mode | type, makedev(maj, min));
 		if (ret < 0 && errno != EEXIST)
-			eprintf("mknod %s:", dev);
-
+			eprintf("mknod %s:", devpath);
 		pw = getpwnam(Rules[i].user);
 		if (!pw)
 			eprintf("getpwnam %s:", Rules[i].user);
-
 		gr = getgrnam(Rules[i].group);
 		if (!gr)
 			eprintf("getgrnam %s:", Rules[i].group);
-
-		ret = chown(dev, pw->pw_uid, gr->gr_gid);
+		ret = chown(devpath, pw->pw_uid, gr->gr_gid);
 		if (ret < 0)
-			eprintf("chown %s:", dev);
+			eprintf("chown %s:", devpath);
+
+		if (Rule->cmd) {
+			switch (Rule->cmd[0]) {
+			case '@':
+			case '$':
+			case '*':
+				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
+					Rule->cmd, Rule->devregex);
+				return -1;
+			default:
+				eprintf("Invalid command '%s'\n", Rule->cmd);
+			}
+		}
 		break;
 	}
 

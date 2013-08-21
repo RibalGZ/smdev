@@ -1,5 +1,5 @@
 /* See LICENSE file for copyright and license details. */
-struct {
+struct Rule {
         const char *devregex;
         const char *user;
         const char *group;
