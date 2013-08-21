@@ -72,7 +72,7 @@ create_dev(const char *path)
 	struct Rule *Rule;
 	struct passwd *pw;
 	struct group *gr;
-	char buf[64], *p;
+	char buf[BUFSIZ], *p;
 	char tmppath[PATH_MAX], devpath[PATH_MAX];
 	char *devname;
 	int maj, min, type;
@@ -142,18 +142,30 @@ create_dev(const char *path)
 		if (ret < 0)
 			eprintf("chown %s:", devpath);
 
+		if (chdir("/dev") < 0)
+			eprintf("chdir /dev:");
+		snprintf(buf, sizeof(buf), "SMDEV=%s", devname);
+		if (putenv(buf) < 0)
+			eprintf("putenv:");
+
 		if (Rule->cmd) {
 			switch (Rule->cmd[0]) {
 			case '@':
+				system(&Rule->cmd[1]);
+				break;
 			case '$':
 			case '*':
 				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
 					Rule->cmd, Rule->devregex);
-				return -1;
+				break;
 			default:
 				eprintf("Invalid command '%s'\n", Rule->cmd);
 			}
 		}
+
+		if (chdir(path) < 0)
+			eprintf("chdir %s:", path);
+
 		break;
 	}
 
