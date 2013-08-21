@@ -73,8 +73,8 @@ create_dev(const char *path)
 	struct passwd *pw;
 	struct group *gr;
 	char buf[BUFSIZ], *p;
-	char tmppath[PATH_MAX], devpath[PATH_MAX];
-	char *devname;
+	const char *devname;
+	char origdevname[PATH_MAX];
 	int maj, min, type;
 	int i, ret;
 
@@ -82,24 +82,21 @@ create_dev(const char *path)
 	if (!p)
 		return -1;
 	p++;
-	devname = strdup(p);
-	if (!devname)
-		eprintf("strdup:");
-	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
+	devname = p;
+	snprintf(origdevname, sizeof(origdevname), "/dev/%s", devname);
 
-	snprintf(tmppath, sizeof(tmppath), "%s/dev", path);
-	ret = devtomajmin(tmppath, &maj, &min);
-	if (ret < 0) {
-		free(devname);
+	snprintf(buf, sizeof(buf), "%s/dev", path);
+	ret = devtomajmin(buf, &maj, &min);
+	if (ret < 0)
 		return -1;
-	}
 
 	snprintf(buf, sizeof(buf), "%d:%d", maj, min);
 	type = devtype(buf);
-	if (type < 0) {
-		free(devname);
+	if (type < 0)
 		return -1;
-	}
+
+	if (chdir("/dev") < 0)
+		eprintf("chdir /dev:");
 
 	for (i = 0; i < LEN(Rules); i++) {
 		Rule = &Rules[i];
@@ -107,48 +104,42 @@ create_dev(const char *path)
 		if (matchrule(Rule, devname) < 0)
 			continue;
 
-		/* Create the dev paths if necessary */
 		if (Rule->path) {
-			switch (Rule->path[0]) {
-			case '=':
-				if (Rule->path[strlen(Rule->path) - 1] == '/') {
-					snprintf(devpath, sizeof(devpath), "/dev/%s", &Rule->path[1]);
-					umask(022);
-					if (mkpath(devpath, 0755) < 0)
-						eprintf("mkdir %s:", devpath);
-					umask(0);
-					strcat(devpath, devname);
-				} else {
-					snprintf(devpath, sizeof(devpath),
-						 "/dev/%s", &Rule->path[1]);
-				}
-				break;
-			case '>':
-				fprintf(stderr, "Unsupported path '%s' for target '%s'\n",
-					Rule->path, Rule->devregex);
-				break;
-			default:
-				eprintf("Invalid path '%s'\n", Rule->path);
+			if (Rule->path[strlen(Rule->path) - 1] == '/') {
+				umask(022);
+				if (mkpath(&Rule->path[1], 0755) < 0)
+					eprintf("mkdir %s:", &Rule->path[1]);
+				umask(0);
+				if (chdir(&Rule->path[1]) < 0)
+					eprintf("chdir %s:", &Rule->path[1]);
+			} else {
+				devname = &Rule->path[1];
 			}
 		}
 
 		/* Create the actual dev nodes */
-		ret = mknod(devpath, Rules[i].mode | type, makedev(maj, min));
+		ret = mknod(devname, Rules[i].mode | type, makedev(maj, min));
 		if (ret < 0 && errno != EEXIST)
-			eprintf("mknod %s:", devpath);
+			eprintf("mknod %s:", devname);
 		pw = getpwnam(Rules[i].user);
 		if (!pw)
 			eprintf("getpwnam %s:", Rules[i].user);
 		gr = getgrnam(Rules[i].group);
 		if (!gr)
 			eprintf("getgrnam %s:", Rules[i].group);
-		ret = chown(devpath, pw->pw_uid, gr->gr_gid);
+		ret = chown(devname, pw->pw_uid, gr->gr_gid);
 		if (ret < 0)
-			eprintf("chown %s:", devpath);
+			eprintf("chown %s:", devname);
+
+		/* Create the symlinks */
+		if (Rule->path && Rule->path[0] == '>') {
+			snprintf(buf, sizeof(buf), "%s%s", &Rule->path[1], devname);
+			if (symlink(buf, origdevname))
+				eprintf("symlink %s -> %s:",
+					origdevname, buf);
+		}
 
 		/* Export the needed environment */
-		if (chdir("/dev") < 0)
-			eprintf("chdir /dev:");
 		snprintf(buf, sizeof(buf), "SMDEV=%s", devname);
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
@@ -161,21 +152,19 @@ create_dev(const char *path)
 				break;
 			case '$':
 			case '*':
+			default:
 				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
 					Rule->cmd, Rule->devregex);
 				break;
-			default:
-				eprintf("Invalid command '%s'\n", Rule->cmd);
 			}
 		}
-
-		if (chdir(path) < 0)
-			eprintf("chdir %s:", path);
 
 		break;
 	}
 
-	free(devname);
+	if (chdir(path) < 0)
+		eprintf("chdir %s:", path);
+
 	return 0;
 }
 
