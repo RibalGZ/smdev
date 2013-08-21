@@ -107,6 +107,7 @@ create_dev(const char *path)
 		if (matchrule(Rule, devname) < 0)
 			continue;
 
+		/* Create the dev paths if necessary */
 		if (Rule->path) {
 			switch (Rule->path[0]) {
 			case '=':
@@ -129,6 +130,7 @@ create_dev(const char *path)
 			}
 		}
 
+		/* Create the actual dev nodes */
 		ret = mknod(devpath, Rules[i].mode | type, makedev(maj, min));
 		if (ret < 0 && errno != EEXIST)
 			eprintf("mknod %s:", devpath);
@@ -142,12 +144,14 @@ create_dev(const char *path)
 		if (ret < 0)
 			eprintf("chown %s:", devpath);
 
+		/* Export the needed environment */
 		if (chdir("/dev") < 0)
 			eprintf("chdir /dev:");
 		snprintf(buf, sizeof(buf), "SMDEV=%s", devname);
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
+		/* Run the command hooks for this rule */
 		if (Rule->cmd) {
 			switch (Rule->cmd[0]) {
 			case '@':
