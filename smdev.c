@@ -105,6 +105,8 @@ create_dev(const char *path)
 			continue;
 
 		if (Rule->path) {
+			if (Rule->path[0] != '=' && Rule->path[0] != '>')
+				eprintf("Invalid path '%s'\n", Rule->path);
 			if (Rule->path[strlen(Rule->path) - 1] == '/') {
 				umask(022);
 				if (mkpath(&Rule->path[1], 0755) < 0)
@@ -152,10 +154,11 @@ create_dev(const char *path)
 				break;
 			case '$':
 			case '*':
-			default:
 				fprintf(stderr, "Unsupported command '%s' for target '%s'\n",
 					Rule->cmd, Rule->devregex);
 				break;
+			default:
+				eprintf("Invalid command '%s'\n", Rule->cmd);
 			}
 		}
 
