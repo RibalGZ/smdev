@@ -39,6 +39,7 @@ main(int argc, char *argv[])
 	if (!sflag)
 		usage();
 
+	umask(0);
 	recurse("/sys/devices", sysrecurse);
 
 	return 0;
