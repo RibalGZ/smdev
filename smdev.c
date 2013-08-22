@@ -23,8 +23,15 @@ struct Event {
 	char *devname;
 };
 
+enum action {
+	ADD_ACTION,
+	REMOVE_ACTION,
+	UNKNOWN_ACTION,
+};
+
 static int dohotplug(void);
 static int matchrule(struct Rule *Rule, char *devname);
+static void runcmd(enum action action, struct Rule *Rule);
 static int createdev(struct Event *ev);
 static void populatedev(const char *path);
 
@@ -56,6 +63,16 @@ main(int argc, char *argv[])
 	return 0;
 }
 
+static enum action
+mapaction(struct Event *ev)
+{
+	if (!strcmp(ev->action, "add"))
+		return ADD_ACTION;
+	if (!strcmp(ev->action, "remove"))
+		return REMOVE_ACTION;
+	return UNKNOWN_ACTION;
+}
+
 static int
 dohotplug(void)
 {
@@ -74,10 +91,13 @@ dohotplug(void)
 	ev.min = estrtol(min, 10);
 	ev.maj = estrtol(maj, 10);
 
-	if (!strcmp(ev.action, "add"))
+	switch (mapaction(&ev)) {
+	case ADD_ACTION:
 		return createdev(&ev);
-	else
-		eprintf("Unsupported action '%s'\n", ev.action);
+	default:
+		eprintf("Unsupported action '%s'\n",
+			ev.action);
+	}
 
 	return 0;
 }
@@ -99,6 +119,25 @@ matchrule(struct Rule *Rule, char *devname)
 	if (ret || off.rm_so || off.rm_eo != strlen(devname))
 		return -1;
 	return 0;
+}
+
+static void
+runcmd(enum action action, struct Rule *Rule)
+{
+	if (!Rule->cmd || action == UNKNOWN_ACTION)
+		return;
+
+	switch (Rule->cmd[0]) {
+	case '*':
+	case '@':
+		if (action == ADD_ACTION)
+			system(&Rule->cmd[1]);
+		break;
+	case '$':
+		break;
+	default:
+		eprintf("Invalid command '%s'\n", Rule->cmd);
+	}
 }
 
 static int
@@ -179,20 +218,7 @@ createdev(struct Event *ev)
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
-		/* Run command hooks for this rule */
-		if (Rule->cmd) {
-			switch (Rule->cmd[0]) {
-			case '*':
-			case '@':
-				system(&Rule->cmd[1]);
-				break;
-			case '$':
-				break;
-			default:
-				eprintf("Invalid command '%s'\n", Rule->cmd);
-			}
-		}
-
+		runcmd(mapaction(ev), Rule);
 		break;
 	}
 
