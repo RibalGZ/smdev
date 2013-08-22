@@ -10,7 +10,8 @@ LIB = \
 	util/eprintf.o      \
 	util/estrtol.o      \
 	util/mkpath.o       \
-	util/recurse.o
+	util/recurse.o      \
+	util/strlcpy.o
 
 SRC = smdev.c
 

@@ -13,3 +13,4 @@ void enprintf(int, const char *, ...);
 void eprintf(const char *, ...);
 long estrtol(const char *, int);
 void recurse(const char *, void (*)(const char *));
+size_t strlcpy(char *dest, const char *src, size_t size);

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <limits.h>
 #include <regex.h>
+#include <libgen.h>
 #include "config.h"
 #include "mkpath.h"
 #include "util.h"
@@ -146,17 +147,19 @@ createdev(struct Event *ev)
 	struct Rule *Rule;
 	struct passwd *pw;
 	struct group *gr;
-	char devpath[PATH_MAX], *devname;
+	char devpath[PATH_MAX];
+	char devname[PATH_MAX];
+	char *dirc, *basec;
 	char buf[BUFSIZ];
 	int type;
-	int i;
+	int i, j;
 
 	snprintf(buf, sizeof(buf), "%d:%d", ev->maj, ev->min);
 	type = devtype(buf);
 	if (type < 0)
 		return -1;
 
-	devname = ev->devname;
+	strlcpy(devname, ev->devname, sizeof(devname));
 	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 	for (i = 0; i < LEN(Rules); i++) {
 		Rule = &Rules[i];
@@ -167,16 +170,40 @@ createdev(struct Event *ev)
 		if (Rule->path) {
 			if (Rule->path[0] != '=' && Rule->path[0] != '>')
 				eprintf("Invalid path '%s'\n", Rule->path);
-			if (Rule->path[strlen(Rule->path) - 1] == '/') {
-				snprintf(buf, sizeof(buf), "/dev/%s", &Rule->path[1]);
+
+			for (j = 1; Rule->path[j]; j++) {
+				if (Rule->path[j] != '/')
+					continue;
+				if (Rule->path[strlen(Rule->path) - 1] == '/') {
+					snprintf(buf, sizeof(buf), "/dev/%s",
+						 &Rule->path[1]);
+					snprintf(devpath, sizeof(devpath), "/dev/%s%s",
+						 &Rule->path[1], devname);
+				} else {
+					dirc = strdup(&Rule->path[1]);
+					if (!dirc)
+						eprintf("strdup:");
+					snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
+					free(dirc);
+
+					basec = strdup(&Rule->path[1]);
+					if (!basec)
+						eprintf("strdup:");
+					strlcpy(devname, basename(basec), sizeof(devname));
+					free(basec);
+
+					snprintf(devpath, sizeof(devpath), "%s/%s",
+						 buf, devname);
+				}
 				umask(022);
 				if (mkpath(buf, 0755) < 0)
 					eprintf("mkdir %s:", buf);
 				umask(0);
-				snprintf(devpath, sizeof(devpath), "/dev/%s%s",
-					 &Rule->path[1], devname);
-			} else {
-				devname = &Rule->path[1];
+				break;
+			}
+
+			if (!Rule->path[j]) {
+				strlcpy(devname, &Rule->path[1], sizeof(devname));
 				snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 			}
 		}
