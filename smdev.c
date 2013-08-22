@@ -32,7 +32,7 @@ enum action {
 
 static int dohotplug(void);
 static int matchrule(struct Rule *Rule, char *devname);
-static void runcmd(enum action action, struct Rule *Rule);
+static void runrule(enum action action, struct Rule *Rule);
 static int createdev(struct Event *ev);
 static void populatedev(const char *path);
 
@@ -123,7 +123,7 @@ matchrule(struct Rule *Rule, char *devname)
 }
 
 static void
-runcmd(enum action action, struct Rule *Rule)
+runrule(enum action action, struct Rule *Rule)
 {
 	if (!Rule->cmd || action == UNKNOWN_ACTION)
 		return;
@@ -245,7 +245,7 @@ createdev(struct Event *ev)
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
-		runcmd(mapaction(ev), Rule);
+		runrule(mapaction(ev), Rule);
 		break;
 	}
 
