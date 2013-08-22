@@ -15,9 +15,18 @@
 #include "mkpath.h"
 #include "util.h"
 
-static int matchrule(const struct Rule *Rule, const char *devname);
-static int create_dev(const char *path);
-static void sysrecurse(const char *path);
+struct Event {
+	int min;
+	int maj;
+	char *action;
+	char *devpath;
+	char *devname;
+};
+
+static int dohotplug(void);
+static int matchrule(struct Rule *Rule, char *devname);
+static int createdev(struct Event *ev);
+static void populatedev(const char *path);
 
 static void
 usage(void)
@@ -38,17 +47,43 @@ main(int argc, char *argv[])
 		usage();
 	} ARGEND;
 
-	if (!sflag)
-		usage();
-
 	umask(0);
-	recurse("/sys/devices", sysrecurse);
+	if (sflag)
+		recurse("/sys/devices", populatedev);
+	else
+		if (dohotplug() < 0)
+			return 1;
+	return 0;
+}
+
+static int
+dohotplug(void)
+{
+	char *min, *maj;
+	struct Event ev;
+
+	min = getenv("MINOR");
+	maj = getenv("MAJOR");
+	ev.action = getenv("ACTION");
+	ev.devpath = getenv("DEVPATH");
+	ev.devname = getenv("DEVNAME");
+	if (!min || !maj || !ev.action || !ev.devpath ||
+	    !ev.devname)
+		return -1;
+
+	ev.min = estrtol(min, 10);
+	ev.maj = estrtol(maj, 10);
+
+	if (!strcmp(ev.action, "add"))
+		return createdev(&ev);
+	else
+		eprintf("Unsupported action '%s'\n", ev.action);
 
 	return 0;
 }
 
 static int
-matchrule(const struct Rule *Rule, const char *devname)
+matchrule(struct Rule *Rule, char *devname)
 {
 	regex_t match;
 	regmatch_t off;
@@ -67,37 +102,23 @@ matchrule(const struct Rule *Rule, const char *devname)
 }
 
 static int
-create_dev(const char *path)
+createdev(struct Event *ev)
 {
 	struct Rule *Rule;
 	struct passwd *pw;
 	struct group *gr;
-	char buf[BUFSIZ], *p;
-	const char *devname;
-	char origdevname[PATH_MAX];
-	int maj, min, type;
-	int i, ret;
+	char devpath[PATH_MAX], *devname;
+	char buf[BUFSIZ];
+	int type;
+	int i;
 
-	p = strrchr(path, '/');
-	if (!p)
-		return -1;
-	p++;
-	devname = p;
-	snprintf(origdevname, sizeof(origdevname), "/dev/%s", devname);
-
-	snprintf(buf, sizeof(buf), "%s/dev", path);
-	ret = devtomajmin(buf, &maj, &min);
-	if (ret < 0)
-		return -1;
-
-	snprintf(buf, sizeof(buf), "%d:%d", maj, min);
+	snprintf(buf, sizeof(buf), "%d:%d", ev->maj, ev->min);
 	type = devtype(buf);
 	if (type < 0)
 		return -1;
 
-	if (chdir("/dev") < 0)
-		eprintf("chdir /dev:");
-
+	devname = ev->devname;
+	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 	for (i = 0; i < LEN(Rules); i++) {
 		Rule = &Rules[i];
 
@@ -108,40 +129,53 @@ create_dev(const char *path)
 			if (Rule->path[0] != '=' && Rule->path[0] != '>')
 				eprintf("Invalid path '%s'\n", Rule->path);
 			if (Rule->path[strlen(Rule->path) - 1] == '/') {
+				snprintf(buf, sizeof(buf), "/dev/%s", &Rule->path[1]);
 				umask(022);
-				if (mkpath(&Rule->path[1], 0755) < 0)
-					eprintf("mkdir %s:", &Rule->path[1]);
+				if (mkpath(buf, 0755) < 0)
+					eprintf("mkdir %s:", buf);
 				umask(0);
-				if (chdir(&Rule->path[1]) < 0)
-					eprintf("chdir %s:", &Rule->path[1]);
+				snprintf(devpath, sizeof(devpath), "/dev/%s%s",
+					 &Rule->path[1], devname);
 			} else {
 				devname = &Rule->path[1];
+				snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 			}
 		}
 
 		/* Create the actual dev nodes */
-		ret = mknod(devname, Rules[i].mode | type, makedev(maj, min));
-		if (ret < 0 && errno != EEXIST)
-			eprintf("mknod %s:", devname);
+		if (mknod(devpath, Rules[i].mode | type,
+			  makedev(ev->maj, ev->min)) < 0 &&
+		    errno != EEXIST)
+			eprintf("mknod %s:", devpath);
+
+		errno = 0;
 		pw = getpwnam(Rules[i].user);
-		if (!pw)
+		if (errno)
 			eprintf("getpwnam %s:", Rules[i].user);
+		else if (!pw)
+			enprintf(1, "getpwnam %s: no such user\n",
+				 Rules[i].user);
+
+		errno = 0;
 		gr = getgrnam(Rules[i].group);
-		if (!gr)
+		if (errno)
 			eprintf("getgrnam %s:", Rules[i].group);
-		ret = chown(devname, pw->pw_uid, gr->gr_gid);
-		if (ret < 0)
-			eprintf("chown %s:", devname);
+		else if (!gr)
+			enprintf(1, "getgrnam %s: no such group\n",
+				 Rules[i].group);
+
+		if (chown(devpath, pw->pw_uid, gr->gr_gid) < 0)
+			eprintf("chown %s:", devpath);
 
 		/* Create symlinks */
 		if (Rule->path && Rule->path[0] == '>') {
-			snprintf(buf, sizeof(buf), "%s%s", &Rule->path[1], devname);
-			if (symlink(buf, origdevname))
+			snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
+			if (symlink(devpath, buf))
 				eprintf("symlink %s -> %s:",
-					origdevname, buf);
+					ev->devname, devpath);
 		}
 
-		snprintf(buf, sizeof(buf), "SMDEV=%s", devname);
+		snprintf(buf, sizeof(buf), "SMDEV=%s", devpath);
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
@@ -162,21 +196,27 @@ create_dev(const char *path)
 		break;
 	}
 
-	if (chdir(path) < 0)
-		eprintf("chdir %s:", path);
-
 	return 0;
 }
 
 static void
-sysrecurse(const char *path)
+populatedev(const char *path)
 {
+	char tmppath[PATH_MAX];
 	char *cwd;
+	struct Event ev;
 
-	recurse(path, sysrecurse);
+	recurse(path, populatedev);
 	if (!strcmp(path, "dev")) {
 		cwd = agetcwd();
-		create_dev(cwd);
+		ev.action = "add";
+		ev.devpath = cwd + strlen("/sys");
+		ev.devname = basename(cwd);
+		snprintf(tmppath, sizeof(tmppath), "/sys%s/dev",
+			 ev.devpath);
+		if (devtomajmin(tmppath, &ev.maj, &ev.min) < 0)
+			return;
+		createdev(&ev);
 		free(cwd);
 	}
 }
