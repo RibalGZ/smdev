@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# Simulate add/remove events by writing directly
+# into the uevent files.
+
+if [[ -z $1 ]]; then
+	echo "usage: $(basename $0) add|remove" 2>&1
+	exit 1
+fi
+
+ev=$1
+for i in $(find /sys/devices -type f); do
+	f=$(basename $i)
+	if [[ $f = "dev" ]]; then
+		d=$(dirname $i)
+		echo $ev > $d/uevent
+	fi
+done
