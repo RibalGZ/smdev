@@ -8,5 +8,5 @@ PREFIX = /usr/local
 #CC = musl-gcc
 LD = $(CC)
 CPPFLAGS = -D_BSD_SOURCE -D_GNU_SOURCE
-CFLAGS   = -g -ansi -Wall $(CPPFLAGS)
+CFLAGS   = -g -ansi -Wall -pedantic $(CPPFLAGS)
 LDFLAGS  = -g

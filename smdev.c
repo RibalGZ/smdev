@@ -29,7 +29,7 @@ struct Event {
 enum action {
 	ADD_ACTION,
 	REMOVE_ACTION,
-	UNKNOWN_ACTION,
+	UNKNOWN_ACTION
 };
 
 static int dohotplug(void);
