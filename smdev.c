@@ -132,10 +132,9 @@ matchrule(int ruleidx, char *devname)
 		pregcache[ruleidx].cached = 1;
 	}
 	match = &pregcache[ruleidx].preg;
-
 	ret = regexec(match, devname, 1, &off, 0);
-
-	if (ret || off.rm_so || off.rm_eo != strlen(devname))
+	if (ret == REG_NOMATCH || off.rm_so ||
+	    off.rm_eo != strlen(devname))
 		return -1;
 	return 0;
 }
