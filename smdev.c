@@ -59,7 +59,7 @@ main(int argc, char *argv[])
 		recurse("/sys/devices", populatedev);
 	else
 		if (dohotplug() < 0)
-			return 1;
+			eprintf("Environment not set up correctly for hotplugging\n");
 	return 0;
 }
 
