@@ -32,8 +32,13 @@ enum action {
 	UNKNOWN_ACTION
 };
 
+static struct pregentry {
+	regex_t preg;
+	int cached;
+} pregcache[LEN(Rules)];
+
 static int dohotplug(void);
-static int matchrule(struct Rule *Rule, char *devname);
+static int matchrule(int ruleidx, char *devname);
 static void runrule(enum action action, struct Rule *Rule);
 static int createdev(struct Event *ev);
 static void populatedev(const char *path);
@@ -48,6 +53,7 @@ int
 main(int argc, char *argv[])
 {
 	int sflag = 0;
+	int i;
 
 	ARGBEGIN {
 	case 's':
@@ -63,6 +69,11 @@ main(int argc, char *argv[])
 	else
 		if (dohotplug() < 0)
 			eprintf("Environment not set up correctly for hotplugging\n");
+
+	for (i = 0; i < LEN(pregcache); i++)
+		if (pregcache[i].cached)
+			regfree(&pregcache[i].preg);
+
 	return 0;
 }
 
@@ -106,18 +117,23 @@ dohotplug(void)
 }
 
 static int
-matchrule(struct Rule *Rule, char *devname)
+matchrule(int ruleidx, char *devname)
 {
-	regex_t match;
+	struct Rule *Rule = &Rules[ruleidx];
+	regex_t *match;
 	regmatch_t off;
 	int ret;
 
-	ret = regcomp(&match, Rule->devregex, REG_EXTENDED);
-	if (ret < 0)
-		eprintf("regcomp:");
+	if (!pregcache[ruleidx].cached) {
+		ret = regcomp(&pregcache[ruleidx].preg,
+			      Rule->devregex, REG_EXTENDED);
+		if (ret < 0)
+			eprintf("regcomp:");
+		pregcache[ruleidx].cached = 1;
+	}
+	match = &pregcache[ruleidx].preg;
 
-	ret = regexec(&match, devname, 1, &off, 0);
-	regfree(&match);
+	ret = regexec(match, devname, 1, &off, 0);
 
 	if (ret || off.rm_so || off.rm_eo != strlen(devname))
 		return -1;
@@ -166,7 +182,7 @@ createdev(struct Event *ev)
 	for (i = 0; i < LEN(Rules); i++) {
 		Rule = &Rules[i];
 
-		if (matchrule(Rule, devname) < 0)
+		if (matchrule(i, devname) < 0)
 			continue;
 
 		if (Rule->path) {
