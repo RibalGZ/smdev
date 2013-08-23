@@ -44,6 +44,7 @@ static int matchrule(int ruleidx, char *devname);
 static void runrule(struct rule *rule);
 static void parsepath(struct rule *rule, char *devpath,
 		      size_t devpathsz, char *devname);
+static int removedev(struct event *ev);
 static int createdev(struct event *ev);
 static int doevent(struct event *ev);
 static int craftev(struct event *ev, enum action action,
@@ -195,6 +196,31 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 }
 
 static int
+removedev(struct event *ev)
+{
+	struct rule *rule;
+	char buf[PATH_MAX];
+	char devpath[PATH_MAX];
+	char devname[PATH_MAX];
+
+	rule = ev->rule;
+	strlcpy(devname, ev->devname, sizeof(devname));
+	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
+	if (rule->path)
+		parsepath(rule, devpath, sizeof(devpath),
+			  devname);
+	runrule(rule);
+	/* Delete device node */
+	unlink(devpath);
+	/* Delete symlink */
+	if (rule->path && rule->path[0] == '>') {
+		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
+		unlink(buf);
+	}
+	return 0;
+}
+
+static int
 createdev(struct event *ev)
 {
 	struct rule *rule;
@@ -261,7 +287,7 @@ createdev(struct event *ev)
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
 		if (symlink(devpath, buf))
 			eprintf("symlink %s -> %s:",
-				ev->devname, devpath);
+				buf, devpath);
 	}
 
 	snprintf(buf, sizeof(buf), "SMDEV=%s", devpath);
@@ -286,6 +312,8 @@ doevent(struct event *ev)
 		switch (ev->action) {
 		case ADD_ACTION:
 			return createdev(ev);
+		case REMOVE_ACTION:
+			return removedev(ev);
 		default:
 			break;
 		}
