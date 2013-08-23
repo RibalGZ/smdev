@@ -280,6 +280,7 @@ createdev(struct event *ev)
 		eprintf("chown %s:", devpath);
 
 	if (rule->path && rule->path[0] == '>') {
+		/* ev->devname is the original device name */
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
 		if (symlink(devpath, buf) < 0)
 			eprintf("symlink %s -> %s:",
