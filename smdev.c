@@ -24,28 +24,29 @@ enum action {
 	UNKNOWN_ACTION
 };
 
-struct Event {
+struct event {
 	int min;
 	int maj;
 	enum action action;
 	char *devpath;
 	char *devname;
-	struct Rule *Rule;
+	struct rule *rule;
 };
 
+/* Simple cache for regcomp() */
 static struct pregentry {
 	regex_t preg;
 	int cached;
-} pregcache[LEN(Rules)];
+} pregcache[LEN(rules)];
 
 static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
-static void runrule(struct Rule *Rule);
-static void parsepath(struct Rule *Rule, char *devpath, size_t sz,
-		      char *devname);
-static int createdev(struct Event *ev);
-static int doevent(struct Event *ev);
-static int craftev(struct Event *ev, enum action action,
+static void runrule(struct rule *rule);
+static void parsepath(struct rule *rule, char *devpath,
+		      size_t devpathsz, char *devname);
+static int createdev(struct event *ev);
+static int doevent(struct event *ev);
+static int craftev(struct event *ev, enum action action,
 		   char *sysfspath);
 static void populatedev(const char *path);
 
@@ -93,12 +94,13 @@ mapaction(const char *action)
 	return UNKNOWN_ACTION;
 }
 
+/* Handle hotplugging events */
 static int
 dohotplug(void)
 {
 	char *min, *maj;
 	char *action;
-	struct Event ev;
+	struct event ev;
 
 	min = getenv("MINOR");
 	maj = getenv("MAJOR");
@@ -116,17 +118,21 @@ dohotplug(void)
 	return doevent(&ev);
 }
 
+/*
+ * `ruleidx' indexes into the rules[] table.  We assume
+ * pregcache[] is mapped 1-1 with the rules[] table.
+ */
 static int
 matchrule(int ruleidx, char *devname)
 {
-	struct Rule *Rule = &Rules[ruleidx];
+	struct rule *rule = &rules[ruleidx];
 	regex_t *match;
 	regmatch_t off;
 	int ret;
 
 	if (!pregcache[ruleidx].cached) {
 		ret = regcomp(&pregcache[ruleidx].preg,
-			      Rule->devregex, REG_EXTENDED);
+			      rule->devregex, REG_EXTENDED);
 		if (ret < 0)
 			eprintf("regcomp:");
 		pregcache[ruleidx].cached = 1;
@@ -140,53 +146,58 @@ matchrule(int ruleidx, char *devname)
 }
 
 static void
-runrule(struct Rule *Rule)
+runrule(struct rule *rule)
 {
-	if (!Rule->cmd)
+	if (!rule->cmd)
 		return;
 
-	system(&Rule->cmd[1]);
+	system(&rule->cmd[1]);
 }
 
+/*
+ * Parse rule->path[] and set `devpath' to the absolute
+ * path of the device node.  If we have to rename the
+ * device node then set `devname' to the new device name.
+ */
 static void
-parsepath(struct Rule *Rule, char *devpath, size_t sz,
+parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 	  char *devname)
 {
 	char buf[BUFSIZ], *p;
 	char *dirc, *basec;
 
-	if (Rule->path[0] != '=' && Rule->path[0] != '>')
-		eprintf("Invalid path '%s'\n", Rule->path);
+	if (rule->path[0] != '=' && rule->path[0] != '>')
+		eprintf("Invalid path '%s'\n", rule->path);
 
-	p = strchr(&Rule->path[1], '/');
+	p = strchr(&rule->path[1], '/');
 	if (p) {
-		if (Rule->path[strlen(Rule->path) - 1] == '/') {
-			snprintf(devpath, sz, "/dev/%s%s",
-				 &Rule->path[1], devname);
-		} else {
-			dirc = strdup(&Rule->path[1]);
-			if (!dirc)
-				eprintf("strdup:");
-			snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-			free(dirc);
-			basec = strdup(&Rule->path[1]);
-			if (!basec)
-				eprintf("strdup:");
-			strlcpy(devname, basename(basec), sizeof(devname));
-			free(basec);
-			snprintf(devpath, sz, "%s/%s",
-				 buf, devname);
+		if (rule->path[strlen(rule->path) - 1] == '/') {
+			snprintf(devpath, devpathsz, "/dev/%s%s",
+				 &rule->path[1], devname);
+			return;
 		}
+		dirc = strdup(&rule->path[1]);
+		if (!dirc)
+			eprintf("strdup:");
+		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
+		free(dirc);
+		basec = strdup(&rule->path[1]);
+		if (!basec)
+			eprintf("strdup:");
+		strlcpy(devname, basename(basec), sizeof(devname));
+		free(basec);
+		snprintf(devpath, devpathsz, "%s/%s",
+			 buf, devname);
 	} else {
-		strlcpy(devname, &Rule->path[1], sizeof(devname));
-		snprintf(devpath, sz, "/dev/%s", devname);
+		strlcpy(devname, &rule->path[1], sizeof(devname));
+		snprintf(devpath, devpathsz, "/dev/%s", devname);
 	}
 }
 
 static int
-createdev(struct Event *ev)
+createdev(struct event *ev)
 {
-	struct Rule *Rule;
+	struct rule *rule;
 	struct passwd *pw;
 	struct group *gr;
 	char *dirc;
@@ -195,7 +206,7 @@ createdev(struct Event *ev)
 	char buf[BUFSIZ];
 	int type;
 
-	Rule = ev->Rule;
+	rule = ev->rule;
 
 	snprintf(buf, sizeof(buf), "%d:%d", ev->maj, ev->min);
 	type = devtype(buf);
@@ -205,8 +216,9 @@ createdev(struct Event *ev)
 	strlcpy(devname, ev->devname, sizeof(devname));
 	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 
-	if (Rule->path) {
-		parsepath(Rule, devpath, sizeof(devpath),
+	/* Parse path and create the directory tree */
+	if (rule->path) {
+		parsepath(rule, devpath, sizeof(devpath),
 			  devname);
 		dirc = strdup(devpath);
 		if (!dirc)
@@ -219,33 +231,33 @@ createdev(struct Event *ev)
 		umask(0);
 	}
 
-	/* Create the actual dev nodes */
-	if (mknod(devpath, Rule->mode | type,
+	/* Create the actual dev node */
+	if (mknod(devpath, rule->mode | type,
 		  makedev(ev->maj, ev->min)) < 0 &&
 	    errno != EEXIST)
 		eprintf("mknod %s:", devpath);
 
 	errno = 0;
-	pw = getpwnam(Rule->user);
+	pw = getpwnam(rule->user);
 	if (errno)
-		eprintf("getpwnam %s:", Rule->user);
+		eprintf("getpwnam %s:", rule->user);
 	else if (!pw)
 		enprintf(1, "getpwnam %s: no such user\n",
-			 Rule->user);
+			 rule->user);
 
 	errno = 0;
-	gr = getgrnam(Rule->group);
+	gr = getgrnam(rule->group);
 	if (errno)
-		eprintf("getgrnam %s:", Rule->group);
+		eprintf("getgrnam %s:", rule->group);
 	else if (!gr)
 		enprintf(1, "getgrnam %s: no such group\n",
-			 Rule->group);
+			 rule->group);
 
 	if (chown(devpath, pw->pw_uid, gr->gr_gid) < 0)
 		eprintf("chown %s:", devpath);
 
-	/* Create symlinks */
-	if (Rule->path && Rule->path[0] == '>') {
+	/* Create symlink */
+	if (rule->path && rule->path[0] == '>') {
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
 		if (symlink(devpath, buf))
 			eprintf("symlink %s -> %s:",
@@ -256,20 +268,21 @@ createdev(struct Event *ev)
 	if (putenv(buf) < 0)
 		eprintf("putenv:");
 
-	runrule(Rule);
+	runrule(rule);
 
 	return 0;
 }
 
+/* Event dispatcher */
 static int
-doevent(struct Event *ev)
+doevent(struct event *ev)
 {
 	int i;
 
-	for (i = 0; i < LEN(Rules); i++) {
+	for (i = 0; i < LEN(rules); i++) {
 		if (matchrule(i, ev->devname) < 0)
 			continue;
-		ev->Rule = &Rules[i];
+		ev->rule = &rules[i];
 		switch (ev->action) {
 		case ADD_ACTION:
 			return createdev(ev);
@@ -281,8 +294,9 @@ doevent(struct Event *ev)
 	return 0;
 }
 
+/* Craft a fake event so the rest of the code can cope */
 static int
-craftev(struct Event *ev, enum action action, char *sysfspath)
+craftev(struct event *ev, enum action action, char *sysfspath)
 {
 	char path[PATH_MAX];
 
@@ -300,7 +314,7 @@ static void
 populatedev(const char *path)
 {
 	char *cwd;
-	struct Event ev;
+	struct event ev;
 
 	recurse(path, populatedev);
 	if (!strcmp(path, "dev")) {
