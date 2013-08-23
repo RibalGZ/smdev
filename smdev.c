@@ -166,30 +166,31 @@ static void
 parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 	  char *devname, size_t devnamesz)
 {
-	char buf[BUFSIZ], *p;
+	char buf[BUFSIZ], *p, *path;
 	char *dirc;
 
 	if (rule->path[0] != '=' && rule->path[0] != '>')
 		eprintf("Invalid path '%s'\n", rule->path);
 
+	path = &rule->path[1];
+
 	/* No need to rename the device node */
 	if (rule->path[strlen(rule->path) - 1] == '/') {
 		snprintf(devpath, devpathsz, "/dev/%s%s",
-			 &rule->path[1], devname);
+			 path, devname);
 		return;
 	}
 
-	p = strchr(&rule->path[1], '/');
+	p = strchr(path, '/');
 	if (p) {
-		if (!(dirc = strdup(&rule->path[1])))
+		if (!(dirc = strdup(path)))
 			eprintf("strdup:");
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-		strlcpy(devname, basename(&rule->path[1]), devnamesz);
-		snprintf(devpath, devpathsz, "%s/%s",
-			 buf, devname);
+		strlcpy(devname, basename(path), devnamesz);
+		snprintf(devpath, devpathsz, "%s/%s", buf, devname);
 		free(dirc);
 	} else {
-		strlcpy(devname, &rule->path[1], devnamesz);
+		strlcpy(devname, path, devnamesz);
 		snprintf(devpath, devpathsz, "/dev/%s", devname);
 	}
 }
