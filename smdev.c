@@ -25,15 +25,15 @@ enum action {
 };
 
 struct event {
-	int min;
-	int maj;
+	int minor;
+	int major;
 	enum action action;
 	char *devpath;
 	char *devname;
 	struct rule *rule;
 };
 
-/* Simple cache for regcomp() */
+/* Simple cache for regcomp() results */
 static struct pregentry {
 	regex_t preg;
 	int cached;
@@ -41,7 +41,7 @@ static struct pregentry {
 
 static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
-static void runrule(struct rule *rule);
+static void runrulecmd(struct rule *rule);
 static void parsepath(struct rule *rule, char *devpath,
 		      size_t devpathsz, char *devname);
 static int removedev(struct event *ev);
@@ -72,11 +72,12 @@ main(int argc, char *argv[])
 	} ARGEND;
 
 	umask(0);
-	if (sflag)
+	if (sflag) {
 		recurse("/sys/devices", populatedev);
-	else
+	} else {
 		if (dohotplug() < 0)
 			eprintf("Environment not set up correctly for hotplugging\n");
+	}
 
 	for (i = 0; i < LEN(pregcache); i++)
 		if (pregcache[i].cached)
@@ -88,9 +89,9 @@ main(int argc, char *argv[])
 static enum action
 mapaction(const char *action)
 {
-	if (!strcmp(action, "add"))
+	if (strcmp(action, "add") == 0)
 		return ADD_ACTION;
-	if (!strcmp(action, "remove"))
+	if (strcmp(action, "remove") == 0)
 		return REMOVE_ACTION;
 	return UNKNOWN_ACTION;
 }
@@ -99,23 +100,25 @@ mapaction(const char *action)
 static int
 dohotplug(void)
 {
-	char *min, *maj;
+	char *minor, *major;
 	char *action;
+	char *devpath;
+	char *devname;
 	struct event ev;
 
-	min = getenv("MINOR");
-	maj = getenv("MAJOR");
+	minor = getenv("MINOR");
+	major = getenv("MAJOR");
 	action = getenv("ACTION");
-	ev.devpath = getenv("DEVPATH");
-	ev.devname = getenv("DEVNAME");
-	if (!min || !maj || !action || !ev.devpath ||
-	    !ev.devname)
+	devpath = getenv("DEVPATH");
+	devname = getenv("DEVNAME");
+	if (!minor || !major || !action || !devpath || !devname)
 		return -1;
 
-	ev.min = estrtol(min, 10);
-	ev.maj = estrtol(maj, 10);
+	ev.minor = estrtol(minor, 10);
+	ev.major = estrtol(major, 10);
 	ev.action = mapaction(action);
-
+	ev.devpath = devpath;
+	ev.devname = devname;
 	return doevent(&ev);
 }
 
@@ -127,7 +130,7 @@ static int
 matchrule(int ruleidx, char *devname)
 {
 	struct rule *rule = &rules[ruleidx];
-	regex_t *match;
+	regex_t *preg;
 	regmatch_t off;
 	int ret;
 
@@ -138,8 +141,9 @@ matchrule(int ruleidx, char *devname)
 			eprintf("regcomp:");
 		pregcache[ruleidx].cached = 1;
 	}
-	match = &pregcache[ruleidx].preg;
-	ret = regexec(match, devname, 1, &off, 0);
+	preg = &pregcache[ruleidx].preg;
+
+	ret = regexec(preg, devname, 1, &off, 0);
 	if (ret == REG_NOMATCH || off.rm_so ||
 	    off.rm_eo != strlen(devname))
 		return -1;
@@ -147,12 +151,10 @@ matchrule(int ruleidx, char *devname)
 }
 
 static void
-runrule(struct rule *rule)
+runrulecmd(struct rule *rule)
 {
-	if (!rule->cmd)
-		return;
-
-	system(&rule->cmd[1]);
+	if (rule->cmd)
+		system(&rule->cmd[1]);
 }
 
 /*
@@ -170,25 +172,25 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 	if (rule->path[0] != '=' && rule->path[0] != '>')
 		eprintf("Invalid path '%s'\n", rule->path);
 
+	/* No need to rename the device node */
+	if (rule->path[strlen(rule->path) - 1] == '/') {
+		snprintf(devpath, devpathsz, "/dev/%s%s",
+			 &rule->path[1], devname);
+		return;
+	}
+
 	p = strchr(&rule->path[1], '/');
 	if (p) {
-		if (rule->path[strlen(rule->path) - 1] == '/') {
-			snprintf(devpath, devpathsz, "/dev/%s%s",
-				 &rule->path[1], devname);
-			return;
-		}
-		dirc = strdup(&rule->path[1]);
-		if (!dirc)
+		if (!(dirc = strdup(&rule->path[1])))
 			eprintf("strdup:");
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-		free(dirc);
-		basec = strdup(&rule->path[1]);
-		if (!basec)
+		if (!(basec = strdup(&rule->path[1])))
 			eprintf("strdup:");
 		strlcpy(devname, basename(basec), sizeof(devname));
-		free(basec);
 		snprintf(devpath, devpathsz, "%s/%s",
 			 buf, devname);
+		free(dirc);
+		free(basec);
 	} else {
 		strlcpy(devname, &rule->path[1], sizeof(devname));
 		snprintf(devpath, devpathsz, "/dev/%s", devname);
@@ -209,7 +211,7 @@ removedev(struct event *ev)
 	if (rule->path)
 		parsepath(rule, devpath, sizeof(devpath),
 			  devname);
-	runrule(rule);
+	runrulecmd(rule);
 	/* Delete device node */
 	unlink(devpath);
 	/* Delete symlink */
@@ -234,9 +236,8 @@ createdev(struct event *ev)
 
 	rule = ev->rule;
 
-	snprintf(buf, sizeof(buf), "%d:%d", ev->maj, ev->min);
-	type = devtype(buf);
-	if (type < 0)
+	snprintf(buf, sizeof(buf), "%d:%d", ev->major, ev->minor);
+	if ((type = devtype(buf)) < 0)
 		return -1;
 
 	strlcpy(devname, ev->devname, sizeof(devname));
@@ -246,8 +247,7 @@ createdev(struct event *ev)
 	if (rule->path) {
 		parsepath(rule, devpath, sizeof(devpath),
 			  devname);
-		dirc = strdup(devpath);
-		if (!dirc)
+		if (!(dirc = strdup(devpath)))
 			eprintf("strdup:");
 		strlcpy(buf, dirname(dirc), sizeof(buf));
 		free(dirc);
@@ -257,9 +257,8 @@ createdev(struct event *ev)
 		umask(0);
 	}
 
-	/* Create the actual dev node */
 	if (mknod(devpath, rule->mode | type,
-		  makedev(ev->maj, ev->min)) < 0 &&
+		  makedev(ev->major, ev->minor)) < 0 &&
 	    errno != EEXIST)
 		eprintf("mknod %s:", devpath);
 
@@ -282,10 +281,9 @@ createdev(struct event *ev)
 	if (chown(devpath, pw->pw_uid, gr->gr_gid) < 0)
 		eprintf("chown %s:", devpath);
 
-	/* Create symlink */
 	if (rule->path && rule->path[0] == '>') {
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
-		if (symlink(devpath, buf))
+		if (symlink(devpath, buf) < 0)
 			eprintf("symlink %s -> %s:",
 				buf, devpath);
 	}
@@ -294,7 +292,7 @@ createdev(struct event *ev)
 	if (putenv(buf) < 0)
 		eprintf("putenv:");
 
-	runrule(rule);
+	runrulecmd(rule);
 
 	return 0;
 }
@@ -333,7 +331,7 @@ craftev(struct event *ev, enum action action, char *sysfspath)
 	ev->devname = basename(sysfspath);
 	snprintf(path, sizeof(path), "/sys%s/dev",
 		 ev->devpath);
-	if (devtomajmin(path, &ev->maj, &ev->min) < 0)
+	if (devtomajmin(path, &ev->major, &ev->minor) < 0)
 		return -1;
 	return 0;
 }
@@ -345,7 +343,7 @@ populatedev(const char *path)
 	struct event ev;
 
 	recurse(path, populatedev);
-	if (!strcmp(path, "dev")) {
+	if (strcmp(path, "dev") == 0) {
 		cwd = agetcwd();
 		if (!craftev(&ev, ADD_ACTION, cwd))
 			doevent(&ev);
