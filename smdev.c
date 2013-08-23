@@ -167,7 +167,7 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 	  char *devname, size_t devnamesz)
 {
 	char buf[BUFSIZ], *p;
-	char *dirc, *basec;
+	char *dirc;
 
 	if (rule->path[0] != '=' && rule->path[0] != '>')
 		eprintf("Invalid path '%s'\n", rule->path);
@@ -184,13 +184,10 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 		if (!(dirc = strdup(&rule->path[1])))
 			eprintf("strdup:");
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-		if (!(basec = strdup(&rule->path[1])))
-			eprintf("strdup:");
-		strlcpy(devname, basename(basec), devnamesz);
+		strlcpy(devname, basename(&rule->path[1]), devnamesz);
 		snprintf(devpath, devpathsz, "%s/%s",
 			 buf, devname);
 		free(dirc);
-		free(basec);
 	} else {
 		strlcpy(devname, &rule->path[1], devnamesz);
 		snprintf(devpath, devpathsz, "/dev/%s", devname);
