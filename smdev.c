@@ -40,6 +40,8 @@ static struct pregentry {
 static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
 static void runrule(struct Event *ev, struct Rule *Rule);
+static void parsepath(struct Rule *Rule, char *devpath, size_t sz,
+		      char *devname);
 static int createdev(struct Event *ev);
 static void populatedev(const char *path);
 
@@ -168,6 +170,49 @@ runrule(struct Event *ev, struct Rule *Rule)
 	}
 }
 
+static void
+parsepath(struct Rule *Rule, char *devpath, size_t sz,
+	  char *devname)
+{
+	char buf[BUFSIZ], *p;
+	char *dirc, *basec;
+
+	if (Rule->path[0] != '=' && Rule->path[0] != '>')
+		eprintf("Invalid path '%s'\n", Rule->path);
+
+	p = strchr(&Rule->path[1], '/');
+	if (p) {
+		if (Rule->path[strlen(Rule->path) - 1] == '/') {
+			snprintf(buf, sizeof(buf), "/dev/%s",
+				 &Rule->path[1]);
+			snprintf(devpath, sz, "/dev/%s%s",
+				 &Rule->path[1], devname);
+		} else {
+			dirc = strdup(&Rule->path[1]);
+			if (!dirc)
+				eprintf("strdup:");
+			snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
+			free(dirc);
+
+			basec = strdup(&Rule->path[1]);
+			if (!basec)
+				eprintf("strdup:");
+			strlcpy(devname, basename(basec), sizeof(devname));
+			free(basec);
+
+			snprintf(devpath, sz, "%s/%s",
+				 buf, devname);
+		}
+		umask(022);
+		if (mkpath(buf, 0755) < 0)
+			eprintf("mkdir %s:", buf);
+		umask(0);
+	} else {
+		strlcpy(devname, &Rule->path[1], sizeof(devname));
+		snprintf(devpath, sz, "/dev/%s", devname);
+	}
+}
+
 static int
 createdev(struct Event *ev)
 {
@@ -176,10 +221,9 @@ createdev(struct Event *ev)
 	struct group *gr;
 	char devpath[PATH_MAX];
 	char devname[PATH_MAX];
-	char *dirc, *basec;
 	char buf[BUFSIZ];
 	int type;
-	int i, j;
+	int i;
 
 	snprintf(buf, sizeof(buf), "%d:%d", ev->maj, ev->min);
 	type = devtype(buf);
@@ -194,46 +238,9 @@ createdev(struct Event *ev)
 		if (matchrule(i, devname) < 0)
 			continue;
 
-		if (Rule->path) {
-			if (Rule->path[0] != '=' && Rule->path[0] != '>')
-				eprintf("Invalid path '%s'\n", Rule->path);
-
-			for (j = 1; Rule->path[j]; j++) {
-				if (Rule->path[j] != '/')
-					continue;
-				if (Rule->path[strlen(Rule->path) - 1] == '/') {
-					snprintf(buf, sizeof(buf), "/dev/%s",
-						 &Rule->path[1]);
-					snprintf(devpath, sizeof(devpath), "/dev/%s%s",
-						 &Rule->path[1], devname);
-				} else {
-					dirc = strdup(&Rule->path[1]);
-					if (!dirc)
-						eprintf("strdup:");
-					snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-					free(dirc);
-
-					basec = strdup(&Rule->path[1]);
-					if (!basec)
-						eprintf("strdup:");
-					strlcpy(devname, basename(basec), sizeof(devname));
-					free(basec);
-
-					snprintf(devpath, sizeof(devpath), "%s/%s",
-						 buf, devname);
-				}
-				umask(022);
-				if (mkpath(buf, 0755) < 0)
-					eprintf("mkdir %s:", buf);
-				umask(0);
-				break;
-			}
-
-			if (!Rule->path[j]) {
-				strlcpy(devname, &Rule->path[1], sizeof(devname));
-				snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
-			}
-		}
+		if (Rule->path)
+			parsepath(Rule, devpath, sizeof(devpath),
+				  devname);
 
 		/* Create the actual dev nodes */
 		if (mknod(devpath, Rules[i].mode | type,
