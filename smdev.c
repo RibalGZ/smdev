@@ -18,18 +18,18 @@
 #include "mkpath.h"
 #include "util.h"
 
-struct Event {
-	int min;
-	int maj;
-	char *action;
-	char *devpath;
-	char *devname;
-};
-
 enum action {
 	ADD_ACTION,
 	REMOVE_ACTION,
 	UNKNOWN_ACTION
+};
+
+struct Event {
+	int min;
+	int maj;
+	enum action action;
+	char *devpath;
+	char *devname;
 };
 
 static struct pregentry {
@@ -39,7 +39,7 @@ static struct pregentry {
 
 static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
-static void runrule(enum action action, struct Rule *Rule);
+static void runrule(struct Event *ev, struct Rule *Rule);
 static int createdev(struct Event *ev);
 static void populatedev(const char *path);
 
@@ -78,11 +78,11 @@ main(int argc, char *argv[])
 }
 
 static enum action
-mapaction(struct Event *ev)
+mapaction(const char *action)
 {
-	if (!strcmp(ev->action, "add"))
+	if (!strcmp(action, "add"))
 		return ADD_ACTION;
-	if (!strcmp(ev->action, "remove"))
+	if (!strcmp(action, "remove"))
 		return REMOVE_ACTION;
 	return UNKNOWN_ACTION;
 }
@@ -91,21 +91,23 @@ static int
 dohotplug(void)
 {
 	char *min, *maj;
+	char *action;
 	struct Event ev;
 
 	min = getenv("MINOR");
 	maj = getenv("MAJOR");
-	ev.action = getenv("ACTION");
+	action = getenv("ACTION");
 	ev.devpath = getenv("DEVPATH");
 	ev.devname = getenv("DEVNAME");
-	if (!min || !maj || !ev.action || !ev.devpath ||
+	if (!min || !maj || !action || !ev.devpath ||
 	    !ev.devname)
 		return -1;
 
 	ev.min = estrtol(min, 10);
 	ev.maj = estrtol(maj, 10);
+	ev.action = mapaction(action);
 
-	switch (mapaction(&ev)) {
+	switch (ev.action) {
 	case ADD_ACTION:
 		return createdev(&ev);
 	default:
@@ -140,19 +142,27 @@ matchrule(int ruleidx, char *devname)
 }
 
 static void
-runrule(enum action action, struct Rule *Rule)
+runrule(struct Event *ev, struct Rule *Rule)
 {
-	if (!Rule->cmd || action == UNKNOWN_ACTION)
+	if (!Rule->cmd)
 		return;
 
 	switch (Rule->cmd[0]) {
 	case '*':
-	case '@':
-		if (action == ADD_ACTION)
+		switch (ev->action) {
+		case ADD_ACTION:
 			system(&Rule->cmd[1]);
+			break;
+		default:
+			eprintf("Unsupported action '%s'\n",
+				ev->action);
+		}
+		break;
+	case '@':
+		system(&Rule->cmd[1]);
 		break;
 	case '$':
-		break;
+		eprintf("Unsupported action '%s'\n", ev->action);
 	default:
 		eprintf("Invalid command '%s'\n", Rule->cmd);
 	}
@@ -262,7 +272,7 @@ createdev(struct Event *ev)
 		if (putenv(buf) < 0)
 			eprintf("putenv:");
 
-		runrule(mapaction(ev), Rule);
+		runrule(ev, Rule);
 		break;
 	}
 
@@ -279,7 +289,7 @@ populatedev(const char *path)
 	recurse(path, populatedev);
 	if (!strcmp(path, "dev")) {
 		cwd = agetcwd();
-		ev.action = "add";
+		ev.action = ADD_ACTION;
 		ev.devpath = cwd + strlen("/sys");
 		ev.devname = basename(cwd);
 		snprintf(tmppath, sizeof(tmppath), "/sys%s/dev",
