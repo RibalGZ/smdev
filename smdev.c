@@ -43,7 +43,7 @@ static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
 static void runrulecmd(struct rule *rule);
 static void parsepath(struct rule *rule, char *devpath,
-		      size_t devpathsz, char *devname);
+		      size_t devpathsz, char *devname, size_t devnamesz);
 static int removedev(struct event *ev);
 static int createdev(struct event *ev);
 static int doevent(struct event *ev);
@@ -164,7 +164,7 @@ runrulecmd(struct rule *rule)
  */
 static void
 parsepath(struct rule *rule, char *devpath, size_t devpathsz,
-	  char *devname)
+	  char *devname, size_t devnamesz)
 {
 	char buf[BUFSIZ], *p;
 	char *dirc, *basec;
@@ -186,13 +186,13 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
 		if (!(basec = strdup(&rule->path[1])))
 			eprintf("strdup:");
-		strlcpy(devname, basename(basec), sizeof(devname));
+		strlcpy(devname, basename(basec), devnamesz);
 		snprintf(devpath, devpathsz, "%s/%s",
 			 buf, devname);
 		free(dirc);
 		free(basec);
 	} else {
-		strlcpy(devname, &rule->path[1], sizeof(devname));
+		strlcpy(devname, &rule->path[1], devnamesz);
 		snprintf(devpath, devpathsz, "/dev/%s", devname);
 	}
 }
@@ -210,7 +210,7 @@ removedev(struct event *ev)
 	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
 	if (rule->path)
 		parsepath(rule, devpath, sizeof(devpath),
-			  devname);
+			  devname, sizeof(devname));
 	runrulecmd(rule);
 	/* Delete device node */
 	unlink(devpath);
@@ -246,7 +246,7 @@ createdev(struct event *ev)
 	/* Parse path and create the directory tree */
 	if (rule->path) {
 		parsepath(rule, devpath, sizeof(devpath),
-			  devname);
+			  devname, sizeof(devname));
 		if (!(dirc = strdup(devpath)))
 			eprintf("strdup:");
 		strlcpy(buf, dirname(dirc), sizeof(buf));
