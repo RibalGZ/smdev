@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
-size_t strlcpy(char *dest, const char *src, size_t size)
+size_t
+strlcpy(char *dest, const char *src, size_t size)
 {
 	size_t ret = strlen(src);
 
