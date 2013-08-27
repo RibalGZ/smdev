@@ -291,6 +291,8 @@ createdev(struct event *ev)
 	if (putenv(buf) < 0)
 		eprintf("putenv:");
 
+	/* XXX: should chdir to dirname(devpath) and set SMDEV
+	 * to point to the actual device name */
 	runrulecmd(rule);
 
 	return 0;
