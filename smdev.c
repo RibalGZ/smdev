@@ -39,11 +39,17 @@ static struct pregentry {
 	int cached;
 } pregcache[LEN(rules)];
 
+/* The expanded/parsed path components of a rule */
+struct rulepath {
+	char path[PATH_MAX];
+	char name[PATH_MAX];
+};
+
 static int dohotplug(void);
 static int matchrule(int ruleidx, char *devname);
 static void runrulecmd(struct rule *rule);
-static void parsepath(struct rule *rule, char *devpath,
-		      size_t devpathsz, char *devname, size_t devnamesz);
+static void parsepath(struct rule *rule, struct rulepath *rpath,
+		      const char *devname);
 static int removedev(struct event *ev);
 static int createdev(struct event *ev);
 static int doevent(struct event *ev);
@@ -157,19 +163,19 @@ runrulecmd(struct rule *rule)
 		system(&rule->cmd[1]);
 }
 
-/*
- * Parse rule->path[] and set `devpath' to the absolute
- * path of the device node.  If we have to rename the
- * device node then set `devname' to the new device name.
- *
- * `devname' is a copy of ev->devname.
- */
 static void
-parsepath(struct rule *rule, char *devpath, size_t devpathsz,
-	  char *devname, size_t devnamesz)
+parsepath(struct rule *rule, struct rulepath *rpath,
+	  const char *devname)
 {
-	char buf[BUFSIZ], *path;
+	char buf[PATH_MAX], *path;
 	char *dirc;
+
+	if (!rule->path) {
+		strlcpy(rpath->name, devname, sizeof(rpath->name));
+		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s",
+			 rpath->name);
+		return;
+	}
 
 	if (rule->path[0] != '=' && rule->path[0] != '>')
 		eprintf("Invalid path '%s'\n", rule->path);
@@ -178,8 +184,9 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 
 	/* No need to rename the device node */
 	if (rule->path[strlen(rule->path) - 1] == '/') {
-		snprintf(devpath, devpathsz, "/dev/%s%s",
+		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s%s",
 			 path, devname);
+		strlcpy(rpath->name, devname, sizeof(rpath->name));
 		return;
 	}
 
@@ -187,12 +194,14 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 		if (!(dirc = strdup(path)))
 			eprintf("strdup:");
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
-		strlcpy(devname, basename(path), devnamesz);
-		snprintf(devpath, devpathsz, "%s/%s", buf, devname);
+		strlcpy(rpath->name, basename(path), sizeof(rpath->name));
+		snprintf(rpath->path, sizeof(rpath->path), "%s/%s", buf,
+			 rpath->name);
 		free(dirc);
 	} else {
-		strlcpy(devname, path, devnamesz);
-		snprintf(devpath, devpathsz, "/dev/%s", devname);
+		strlcpy(rpath->name, path, sizeof(rpath->name));
+		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s",
+			 rpath->name);
 	}
 }
 
@@ -200,19 +209,14 @@ static int
 removedev(struct event *ev)
 {
 	struct rule *rule;
+	struct rulepath rpath;
 	char buf[PATH_MAX];
-	char devpath[PATH_MAX];
-	char devname[PATH_MAX];
 
 	rule = ev->rule;
-	strlcpy(devname, ev->devname, sizeof(devname));
-	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
-	if (rule->path)
-		parsepath(rule, devpath, sizeof(devpath),
-			  devname, sizeof(devname));
+	parsepath(rule, &rpath, ev->devname);
 	runrulecmd(rule);
 	/* Delete device node */
-	unlink(devpath);
+	unlink(rpath.path);
 	/* Delete symlink */
 	if (rule->path && rule->path[0] == '>') {
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
@@ -225,11 +229,10 @@ static int
 createdev(struct event *ev)
 {
 	struct rule *rule;
+	struct rulepath rpath;
 	struct passwd *pw;
 	struct group *gr;
 	char *dirc;
-	char devpath[PATH_MAX];
-	char devname[PATH_MAX];
 	char buf[BUFSIZ];
 	int type;
 
@@ -239,27 +242,21 @@ createdev(struct event *ev)
 	if ((type = devtype(buf)) < 0)
 		return -1;
 
-	strlcpy(devname, ev->devname, sizeof(devname));
-	snprintf(devpath, sizeof(devpath), "/dev/%s", devname);
-
 	/* Parse path and create the directory tree */
-	if (rule->path) {
-		parsepath(rule, devpath, sizeof(devpath),
-			  devname, sizeof(devname));
-		if (!(dirc = strdup(devpath)))
-			eprintf("strdup:");
-		strlcpy(buf, dirname(dirc), sizeof(buf));
-		free(dirc);
-		umask(022);
-		if (mkpath(buf, 0755) < 0)
-			eprintf("mkdir %s:", buf);
-		umask(0);
-	}
+	parsepath(rule, &rpath, ev->devname);
+	if (!(dirc = strdup(rpath.path)))
+		eprintf("strdup:");
+	strlcpy(buf, dirname(dirc), sizeof(buf));
+	free(dirc);
+	umask(022);
+	if (mkpath(buf, 0755) < 0)
+		eprintf("mkdir %s:", buf);
+	umask(0);
 
-	if (mknod(devpath, rule->mode | type,
+	if (mknod(rpath.path, rule->mode | type,
 		  makedev(ev->major, ev->minor)) < 0 &&
 	    errno != EEXIST)
-		eprintf("mknod %s:", devpath);
+		eprintf("mknod %s:", rpath.path);
 
 	errno = 0;
 	pw = getpwnam(rule->user);
@@ -277,18 +274,18 @@ createdev(struct event *ev)
 		enprintf(1, "getgrnam %s: no such group\n",
 			 rule->group);
 
-	if (chown(devpath, pw->pw_uid, gr->gr_gid) < 0)
-		eprintf("chown %s:", devpath);
+	if (chown(rpath.path, pw->pw_uid, gr->gr_gid) < 0)
+		eprintf("chown %s:", rpath.path);
 
 	if (rule->path && rule->path[0] == '>') {
 		/* ev->devname is the original device name */
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
-		if (symlink(devpath, buf) < 0)
+		if (symlink(rpath.path, buf) < 0)
 			eprintf("symlink %s -> %s:",
-				buf, devpath);
+				buf, rpath.path);
 	}
 
-	snprintf(buf, sizeof(buf), "SMDEV=%s", devpath);
+	snprintf(buf, sizeof(buf), "SMDEV=%s", rpath.path);
 	if (putenv(buf) < 0)
 		eprintf("putenv:");
 
