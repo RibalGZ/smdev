@@ -166,7 +166,7 @@ static void
 parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 	  char *devname, size_t devnamesz)
 {
-	char buf[BUFSIZ], *p, *path;
+	char buf[BUFSIZ], *path;
 	char *dirc;
 
 	if (rule->path[0] != '=' && rule->path[0] != '>')
@@ -181,8 +181,7 @@ parsepath(struct rule *rule, char *devpath, size_t devpathsz,
 		return;
 	}
 
-	p = strchr(path, '/');
-	if (p) {
+	if (strchr(path, '/')) {
 		if (!(dirc = strdup(path)))
 			eprintf("strdup:");
 		snprintf(buf, sizeof(buf), "/dev/%s", dirname(dirc));
