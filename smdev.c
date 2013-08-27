@@ -161,6 +161,8 @@ runrulecmd(struct rule *rule)
  * Parse rule->path[] and set `devpath' to the absolute
  * path of the device node.  If we have to rename the
  * device node then set `devname' to the new device name.
+ *
+ * `devname' is a copy of ev->devname.
  */
 static void
 parsepath(struct rule *rule, char *devpath, size_t devpathsz,
