@@ -238,6 +238,9 @@ createdev(struct event *ev)
 
 	rule = ev->rule;
 
+	if (rule->path && rule->path[0] == '!')
+		return 0;
+
 	snprintf(buf, sizeof(buf), "%d:%d", ev->major, ev->minor);
 	if ((type = devtype(buf)) < 0)
 		return -1;
