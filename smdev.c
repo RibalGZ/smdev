@@ -213,6 +213,10 @@ removedev(struct event *ev)
 	char buf[PATH_MAX];
 
 	rule = ev->rule;
+
+	if (rule->path && rule->path[0] == '!')
+		return 0;
+
 	parsepath(rule, &rpath, ev->devname);
 	runrulecmd(rule);
 	/* Delete device node */
