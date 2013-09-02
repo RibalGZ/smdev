@@ -137,7 +137,7 @@ matchrule(int ruleidx, char *devname)
 {
 	struct rule *rule = &rules[ruleidx];
 	regex_t *preg;
-	regmatch_t off;
+	regmatch_t pmatch;
 	int ret;
 
 	if (!pregcache[ruleidx].cached) {
@@ -149,9 +149,9 @@ matchrule(int ruleidx, char *devname)
 	}
 	preg = &pregcache[ruleidx].preg;
 
-	ret = regexec(preg, devname, 1, &off, 0);
-	if (ret == REG_NOMATCH || off.rm_so ||
-	    off.rm_eo != strlen(devname))
+	ret = regexec(preg, devname, 1, &pmatch, 0);
+	if (ret == REG_NOMATCH || pmatch.rm_so ||
+	    pmatch.rm_eo != strlen(devname))
 		return -1;
 	return 0;
 }
