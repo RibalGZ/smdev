@@ -210,6 +210,7 @@ removedev(struct event *ev)
 {
 	struct rule *rule;
 	struct rulepath rpath;
+	char *ocwd;
 	char buf[PATH_MAX];
 
 	rule = ev->rule;
@@ -217,8 +218,24 @@ removedev(struct event *ev)
 	if (rule->path && rule->path[0] == '!')
 		return 0;
 
+	ocwd = agetcwd();
+
 	parsepath(rule, &rpath, ev->devname);
+
+	if (chdir("/dev") < 0)
+		eprintf("chdir /dev:");
+
+	snprintf(buf, sizeof(buf), "SMDEV=%s", ev->devname);
+	if (putenv(buf) < 0)
+		eprintf("putenv:");
+
 	runrulecmd(rule);
+
+	if (chdir(ocwd) < 0)
+		eprintf("chdir %s:", ocwd);
+
+	free(ocwd);
+
 	/* Delete device node */
 	unlink(rpath.path);
 	/* Delete symlink */
@@ -236,7 +253,7 @@ createdev(struct event *ev)
 	struct rulepath rpath;
 	struct passwd *pw;
 	struct group *gr;
-	char *dirc;
+	char *dirc, *ocwd;
 	char buf[BUFSIZ];
 	int type;
 
@@ -248,6 +265,8 @@ createdev(struct event *ev)
 	snprintf(buf, sizeof(buf), "%d:%d", ev->major, ev->minor);
 	if ((type = devtype(buf)) < 0)
 		return -1;
+
+	ocwd = agetcwd();
 
 	/* Parse path and create the directory tree */
 	parsepath(rule, &rpath, ev->devname);
@@ -292,13 +311,19 @@ createdev(struct event *ev)
 				buf, rpath.path);
 	}
 
-	snprintf(buf, sizeof(buf), "SMDEV=%s", rpath.path);
+	if (chdir("/dev") < 0)
+		eprintf("chdir /dev:");
+
+	snprintf(buf, sizeof(buf), "SMDEV=%s", ev->devname);
 	if (putenv(buf) < 0)
 		eprintf("putenv:");
 
-	/* XXX: should chdir to dirname(devpath) and set SMDEV
-	 * to point to the actual device name */
 	runrulecmd(rule);
+
+	if (chdir(ocwd) < 0)
+		eprintf("chdir %s:", ocwd);
+
+	free(ocwd);
 
 	return 0;
 }
