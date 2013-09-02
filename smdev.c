@@ -180,13 +180,16 @@ parsepath(struct rule *rule, struct rulepath *rpath,
 	if (rule->path[0] != '=' && rule->path[0] != '>')
 		eprintf("Invalid path '%s'\n", rule->path);
 
-	path = &rule->path[1];
+	path = strdup(&rule->path[1]);
+	if (!path)
+		eprintf("strdup:");
 
 	/* No need to rename the device node */
 	if (rule->path[strlen(rule->path) - 1] == '/') {
 		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s%s",
 			 path, devname);
 		strlcpy(rpath->name, devname, sizeof(rpath->name));
+		free(path);
 		return;
 	}
 
@@ -203,6 +206,8 @@ parsepath(struct rule *rule, struct rulepath *rpath,
 		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s",
 			 rpath->name);
 	}
+
+	free(path);
 }
 
 static int

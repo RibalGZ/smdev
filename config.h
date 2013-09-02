@@ -1,11 +1,11 @@
 /* See LICENSE file for copyright and license details. */
 struct rule {
-        char *devregex;
-        char *user;
-        char *group;
+        const char *devregex;
+        const char *user;
+        const char *group;
         int mode;
-        char *path;
-        char *cmd;
+        const char *path;
+        const char *cmd;
 } rules[] = {
         { "null",       "root", "root",  0666, NULL, "@chmod 666 $SMDEV"         },
         { "zero",       "root", "root",  0666, NULL, NULL                        },
