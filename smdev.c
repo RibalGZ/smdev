@@ -214,10 +214,6 @@ removedev(struct event *ev)
 	char buf[PATH_MAX];
 
 	rule = ev->rule;
-
-	if (rule->path && rule->path[0] == '!')
-		return 0;
-
 	ocwd = agetcwd();
 
 	parsepath(rule, &rpath, ev->devname);
@@ -235,6 +231,9 @@ removedev(struct event *ev)
 		eprintf("chdir %s:", ocwd);
 
 	free(ocwd);
+
+	if (rule->path && rule->path[0] == '!')
+		return 0;
 
 	/* Delete device node */
 	unlink(rpath.path);
@@ -258,15 +257,14 @@ createdev(struct event *ev)
 	int type;
 
 	rule = ev->rule;
+	ocwd = agetcwd();
 
 	if (rule->path && rule->path[0] == '!')
-		return 0;
+		goto runrule;
 
 	snprintf(buf, sizeof(buf), "%d:%d", ev->major, ev->minor);
 	if ((type = devtype(buf)) < 0)
 		return -1;
-
-	ocwd = agetcwd();
 
 	/* Parse path and create the directory tree */
 	parsepath(rule, &rpath, ev->devname);
@@ -311,6 +309,7 @@ createdev(struct event *ev)
 				buf, rpath.path);
 	}
 
+runrule:
 	if (chdir("/dev") < 0)
 		eprintf("chdir /dev:");
 
