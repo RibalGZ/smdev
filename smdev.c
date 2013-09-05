@@ -309,9 +309,7 @@ createdev(struct event *ev)
 	if (rule->path && rule->path[0] == '>') {
 		/* ev->devname is the original device name */
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
-		if (symlink(rpath.path, buf) < 0)
-			eprintf("symlink %s -> %s:",
-				buf, rpath.path);
+		symlink(rpath.path, buf);
 	}
 
 runrule:
