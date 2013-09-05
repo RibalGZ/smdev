@@ -48,14 +48,13 @@ util.a: $(LIB)
 	@ranlib $@
 
 install: all
-	@echo installing executable to $(DESTDIR)$(PREFIX)/sbin
-	@mkdir -p $(DESTDIR)$(PREFIX)/sbin
-	@cp -f $(BIN) $(DESTDIR)$(PREFIX)/sbin
-	@cd $(DESTDIR)$(PREFIX)/sbin && chmod 755 $(BIN)
+	@echo installing executable to $(DESTDIR)$(PREFIX)/bin
+	@cp -f $(BIN) $(DESTDIR)$(PREFIX)/bin
+	@cd $(DESTDIR)$(PREFIX)/bin && chmod 755 $(BIN)
 
 uninstall:
-	@echo removing executable from $(DESTDIR)$(PREFIX)/sbin
-	@cd $(DESTDIR)$(PREFIX)/sbin && rm -f $(BIN)
+	@echo removing executable from $(DESTDIR)$(PREFIX)/bin
+	@cd $(DESTDIR)$(PREFIX)/bin && rm -f $(BIN)
 
 clean:
 	@echo cleaning
