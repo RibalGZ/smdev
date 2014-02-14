@@ -32,7 +32,11 @@ binlib: util.a
 
 bin: $(BIN)
 
-$(OBJ): util.h config.mk
+$(OBJ): config.h util.h config.mk
+
+config.h:
+	@echo creating $@ from config.def.h
+	@cp config.def.h $@
 
 .o:
 	@echo LD $@
