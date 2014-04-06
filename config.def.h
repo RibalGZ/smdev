@@ -37,7 +37,7 @@ struct rule {
         { "midi.*",       "root", "audio", 0660, "=snd/",   NULL                        },
         { "seq",          "root", "audio", 0660, "=snd/",   NULL                        },
         { "timer",        "root", "audio", 0660, "=snd/",   NULL                        },
-        { "rtc",          "root", "root",  0664, NULL,      NULL                        },
+        { "rtc[0-9]*",    "root", "root",  0664, NULL,      NULL                        },
         { "vbi[0-9]",     "root", "video", 0660, NULL,      NULL                        },
         { "video[0-9]",   "root", "video", 0660, NULL,      NULL                        },
         { ".*",           "root", "root",  0660, NULL,      NULL                        },
