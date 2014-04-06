@@ -223,14 +223,13 @@ removedev(struct event *ev)
 
 	parsepath(rule, &rpath, ev->devname);
 
-	if (chdir("/dev") < 0)
-		eprintf("chdir /dev:");
-
-	snprintf(buf, sizeof(buf), "SMDEV=%s", ev->devname);
-	if (putenv(buf) < 0)
-		eprintf("putenv:");
-
-	runrulecmd(rule);
+	if(rule->cmd) {
+		if (chdir("/dev") < 0)
+			eprintf("chdir /dev:");
+		if (setenv("SMDEV", ev->devname, 1) < 0)
+			eprintf("setenv:");
+		runrulecmd(rule);
+	}
 
 	if (chdir(ocwd) < 0)
 		eprintf("chdir %s:", ocwd);
@@ -313,14 +312,13 @@ createdev(struct event *ev)
 	}
 
 runrule:
-	if (chdir("/dev") < 0)
-		eprintf("chdir /dev:");
-
-	snprintf(buf, sizeof(buf), "SMDEV=%s", ev->devname);
-	if (putenv(buf) < 0)
-		eprintf("putenv:");
-
-	runrulecmd(rule);
+	if(rule->cmd) {
+		if (chdir("/dev") < 0)
+			eprintf("chdir /dev:");
+		if (setenv("SMDEV", ev->devname, 1) < 0)
+			eprintf("setenv:");
+		runrulecmd(rule);
+	}
 
 	if (chdir(ocwd) < 0)
 		eprintf("chdir %s:", ocwd);
