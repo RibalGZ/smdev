@@ -225,8 +225,6 @@ removedev(struct event *ev)
 	if(rule->cmd) {
 		if (chdir("/dev") < 0)
 			eprintf("chdir /dev:");
-		if (setenv("SMDEV", ev->devname, 1) < 0)
-			eprintf("setenv:");
 		runrulecmd(rule);
 	}
 
@@ -314,8 +312,6 @@ runrule:
 	if(rule->cmd) {
 		if (chdir("/dev") < 0)
 			eprintf("chdir /dev:");
-		if (setenv("SMDEV", ev->devname, 1) < 0)
-			eprintf("setenv:");
 		runrulecmd(rule);
 	}
 
