@@ -7,7 +7,7 @@ extern char *argv0;
 
 char *agetcwd(void);
 void apathmax(char **, long *);
-int devtomajmin(const char *path, int *maj, int *min);
+int readuevent(const char *);
 int devtype(const char *majmin);
 void enprintf(int, const char *, ...);
 void eprintf(const char *, ...);

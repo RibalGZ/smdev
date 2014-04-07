@@ -3,31 +3,40 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "../util.h"
 
-/* Example `path' is /sys/devices/virtual/tty/tty0/dev */
+/* read uevent file and set environment variables */
 int
-devtomajmin(const char *path, int *maj, int *min)
+readuevent(const char *file)
 {
+	FILE *fp;
+	int status = 0;
 	char buf[BUFSIZ];
-	int fd;
-	ssize_t n;
+	char *p, *name, *value;
 
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		eprintf("open %s:", path);
-	n = read(fd, buf, sizeof(buf) - 1);
-	close(fd);
-	if (n < 0)
-		eprintf("%s: read error:", path);
-	if (!n)
+	if(!(fp = fopen(file, "r")))
 		return -1;
-	if (buf[n - 1] == '\n')
-		buf[n - 1] = '\0';
-	buf[n] = '\0';
-	sscanf(buf, "%d:%d", maj, min);
-	return 0;
+	while(!feof(fp)) {
+		fgets(buf, sizeof(buf) - 1, fp);
+		if(ferror(fp)) {
+			status = -2;
+			break;
+		}
+		if((p = strchr(buf, '\n')))
+			*p = '\0';
+		if(!(p = strchr(buf, '=')))
+			continue;
+		*p = '\0';
+		p++;
+		name = buf;
+		value = p;
+		setenv(name, value, 1);
+	}
+	fclose(fp);
+	return status;
 }
 
 /* `majmin' format is maj:min */

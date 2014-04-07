@@ -53,8 +53,7 @@ static void parsepath(struct rule *rule, struct rulepath *rpath,
 static int removedev(struct event *ev);
 static int createdev(struct event *ev);
 static int doevent(struct event *ev);
-static int craftev(struct event *ev, enum action action,
-		   char *sysfspath);
+static int craftev(char *sysfspath);
 static void populatedev(const char *path);
 
 static void
@@ -352,16 +351,18 @@ doevent(struct event *ev)
 
 /* Craft a fake event so the rest of the code can cope */
 static int
-craftev(struct event *ev, enum action action, char *sysfspath)
+craftev(char *sysfspath)
 {
 	char path[PATH_MAX];
+	char *devpath;
 
-	ev->action = action;
-	ev->devpath = sysfspath + strlen("/sys");
-	ev->devname = basename(sysfspath);
-	snprintf(path, sizeof(path), "/sys%s/dev",
-		 ev->devpath);
-	if (devtomajmin(path, &ev->major, &ev->minor) < 0)
+	devpath = sysfspath + strlen("/sys");
+	snprintf(path, sizeof(path), "/sys%s/uevent", devpath);
+
+	clearenv();
+	setenv("ACTION", "add", 1);
+	setenv("DEVPATH", devpath, 1);
+	if(readuevent(path) < 0)
 		return -1;
 	return 0;
 }
@@ -370,13 +371,12 @@ static void
 populatedev(const char *path)
 {
 	char *cwd;
-	struct event ev;
 
 	recurse(path, populatedev);
 	if (strcmp(path, "dev") == 0) {
 		cwd = agetcwd();
-		if (!craftev(&ev, ADD_ACTION, cwd))
-			doevent(&ev);
+		if (!craftev(cwd))
+			dohotplug();
 		free(cwd);
 	}
 }
