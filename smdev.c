@@ -344,9 +344,8 @@ doevent(struct event *ev)
 		case REMOVE_ACTION:
 			return removedev(ev);
 		default:
-			break;
+			return 0;
 		}
-		break;
 	}
 	return 0;
 }
