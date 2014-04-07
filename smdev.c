@@ -166,11 +166,14 @@ static void
 parsepath(struct rule *rule, struct rulepath *rpath,
 	  const char *devname)
 {
-	char buf[PATH_MAX], *path;
-	char *dirc;
+	char buf[PATH_MAX], *path, *dirc;
+	const char *basedevname;
+
+	if(!(basedevname = strrchr(devname, '/')))
+		basedevname = devname;
 
 	if (!rule->path) {
-		strlcpy(rpath->name, devname, sizeof(rpath->name));
+		strlcpy(rpath->name, basedevname, sizeof(rpath->name));
 		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s",
 			 rpath->name);
 		return;
@@ -186,8 +189,8 @@ parsepath(struct rule *rule, struct rulepath *rpath,
 	/* No need to rename the device node */
 	if (rule->path[strlen(rule->path) - 1] == '/') {
 		snprintf(rpath->path, sizeof(rpath->path), "/dev/%s%s",
-			 path, devname);
-		strlcpy(rpath->name, devname, sizeof(rpath->name));
+			 path, basedevname);
+		strlcpy(rpath->name, basedevname, sizeof(rpath->name));
 		free(path);
 		return;
 	}
