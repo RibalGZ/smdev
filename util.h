@@ -8,9 +8,10 @@ extern char *argv0;
 char *agetcwd(void);
 void apathmax(char **, long *);
 int readuevent(const char *);
-int devtype(const char *majmin);
+int devtype(const char *);
 void enprintf(int, const char *, ...);
 void eprintf(const char *, ...);
 long estrtol(const char *, int);
 void recurse(const char *, void (*)(const char *));
-size_t strlcpy(char *dest, const char *src, size_t size);
+#undef strlcpy
+size_t strlcpy(char *, const char *, size_t);
