@@ -288,19 +288,23 @@ createdev(struct event *ev)
 
 	errno = 0;
 	pw = getpwnam(rule->user);
-	if (errno)
-		eprintf("getpwnam %s:", rule->user);
-	else if (!pw)
-		enprintf(1, "getpwnam %s: no such user\n",
-			 rule->user);
+	if (!pw) {
+		if (errno)
+			eprintf("getpwnam %s:", rule->user);
+		else
+			enprintf(1, "getpwnam %s: no such user\n",
+				 rule->user);
+	}
 
 	errno = 0;
 	gr = getgrnam(rule->group);
-	if (errno)
-		eprintf("getgrnam %s:", rule->group);
-	else if (!gr)
-		enprintf(1, "getgrnam %s: no such group\n",
-			 rule->group);
+	if (!gr) {
+		if (errno)
+			eprintf("getgrnam %s:", rule->group);
+		else
+			enprintf(1, "getgrnam %s: no such group\n",
+				 rule->group);
+	}
 
 	if (chown(rpath.path, pw->pw_uid, gr->gr_gid) < 0)
 		eprintf("chown %s:", rpath.path);
