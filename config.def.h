@@ -7,7 +7,7 @@ struct rule {
 	const char *path;
 	const char *cmd;
 } rules[] = {
-	{ "null",         "root", "root",  0666, NULL,      "@chmod 666 $DEVNAME"          },
+	{ "null",         "root", "root",  0666, NULL,      NULL                           },
 	{ "zero",         "root", "root",  0666, NULL,      NULL                           },
 	{ "full",         "root", "root",  0666, NULL,      NULL                           },
 	{ "random",       "root", "root",  0666, NULL,      NULL                           },
@@ -16,7 +16,7 @@ struct rule {
 	{ "mem",          "root", "root",  0640, NULL,      NULL                           },
 	{ "kmem",         "root", "root",  0640, NULL,      NULL                           },
 	{ "port",         "root", "root",  0640, NULL,      NULL                           },
-	{ "console",      "root", "tty",   0600, NULL,      "@chmod 600 $DEVNAME"          },
+	{ "console",      "root", "tty",   0600, NULL,      NULL                           },
 	{ "ptmx",         "root", "tty",   0666, NULL,      NULL                           },
 	{ "tty",          "root", "tty",   0666, NULL,      NULL                           },
 	{ "tty[0-9]",     "root", "root",  0600, NULL,      NULL                           },
@@ -29,13 +29,14 @@ struct rule {
 	{ "sr[0-9]*",     "root", "cdrom", 0660, NULL,      "@ln -sf $DEVNAME /dev/cdrom"  },
 	{ "ts[0-9]+",     "root", "root",  0640, "=input/", NULL                           },
 	{ "input/.*",     "root", "root",  0640, "=input/", NULL                           },
-	{ "dri/.*",       "root", "video", 0660, "=dri/",   "@chown root:video $DEVNAME"   },
-	{ "snd/.*",       "root", "audio", 0660, "=snd/",   "@chown root:audio $DEVNAME"   },
+	{ "dri/.*",       "root", "video", 0660, "=dri/",   NULL                           },
+	{ "snd/.*",       "root", "audio", 0660, "=snd/",   NULL                           },
 	{ "midi.*",       "root", "audio", 0660, "=snd/",   NULL                           },
 	{ "seq",          "root", "audio", 0660, "=snd/",   NULL                           },
 	{ "timer",        "root", "audio", 0660, "=snd/",   NULL                           },
 	{ "rtc[0-9]*",    "root", "root",  0664, NULL,      NULL                           },
 	{ "vbi[0-9]",     "root", "video", 0660, NULL,      NULL                           },
 	{ "video[0-9]",   "root", "video", 0660, NULL,      NULL                           },
+	{ "fuse",         "root", "root",  0666, NULL,      NULL                           },
 	{ ".*",           "root", "root",  0660, NULL,      NULL                           },
 };
