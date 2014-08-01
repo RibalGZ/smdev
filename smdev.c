@@ -309,6 +309,9 @@ createdev(struct event *ev)
 	if (chown(rpath.path, pw->pw_uid, gr->gr_gid) < 0)
 		eprintf("chown %s:", rpath.path);
 
+	if (chmod(rpath.path, rule->mode) < 0)
+		eprintf("chmod %s:", rpath.path);
+
 	if (rule->path && rule->path[0] == '>') {
 		/* ev->devname is the original device name */
 		snprintf(buf, sizeof(buf), "/dev/%s", ev->devname);
