@@ -292,7 +292,7 @@ createdev(struct event *ev)
 		if (errno)
 			eprintf("getpwnam %s:", rule->user);
 		else
-			enprintf(1, "getpwnam %s: no such user\n",
+			eprintf("getpwnam %s: no such user\n",
 				 rule->user);
 	}
 
@@ -302,7 +302,7 @@ createdev(struct event *ev)
 		if (errno)
 			eprintf("getgrnam %s:", rule->group);
 		else
-			enprintf(1, "getgrnam %s: no such group\n",
+			eprintf("getgrnam %s: no such group\n",
 				 rule->group);
 	}
 
