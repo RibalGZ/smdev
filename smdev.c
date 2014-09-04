@@ -428,7 +428,7 @@ ifrename(void)
 				mac2names[i].name, sizeof(ifr.ifr_newname));
 			r = ioctl(sd, SIOCSIFNAME, &ifr);
 			if (r < 0)
-				eprintf("SIOCSIFNAME:");
+				weprintf("SIOCSIFNAME:");
 		}
 	}
 	freeifaddrs(ifas);
