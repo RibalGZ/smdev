@@ -61,7 +61,7 @@ static int createdev(struct event *ev);
 static int doevent(struct event *ev);
 static int craftev(char *sysfspath);
 static void populatedev(const char *path);
-static int ifrename(void);
+static void ifrename(void);
 
 static void
 usage(void)
@@ -396,7 +396,7 @@ populatedev(const char *path)
 	}
 }
 
-static int
+static void
 ifrename(void)
 {
 	struct ifaddrs *ifas, *ifa;
@@ -430,7 +430,6 @@ ifrename(void)
 			}
 		}
 	}
-
+	freeifaddrs(ifas);
 	close(sd);
-	return 0;
 }
