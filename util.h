@@ -11,6 +11,7 @@ int readuevent(const char *);
 int devtype(const char *);
 void enprintf(int, const char *, ...);
 void eprintf(const char *, ...);
+void weprintf(const char *, ...);
 long estrtol(const char *, int);
 void recurse(const char *, void (*)(const char *));
 #undef strlcpy
