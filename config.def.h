@@ -40,3 +40,10 @@ struct rule {
 	{ "fuse",         "root", "root",  0666, NULL,      NULL                           },
 	{ ".*",           "root", "root",  0660, NULL,      NULL                           },
 };
+
+struct mac2name {
+	unsigned char mac[6];
+	const char *name;
+} mac2names[] = {
+	{ .mac = { 0 }, .name = NULL }
+};

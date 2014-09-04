@@ -1,6 +1,12 @@
 /* See LICENSE file for copyright and license details. */
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#include <linux/if_packet.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <ifaddrs.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -55,6 +61,7 @@ static int createdev(struct event *ev);
 static int doevent(struct event *ev);
 static int craftev(char *sysfspath);
 static void populatedev(const char *path);
+static int ifrename(void);
 
 static void
 usage(void)
@@ -87,6 +94,8 @@ main(int argc, char *argv[])
 	for (i = 0; i < LEN(pregcache); i++)
 		if (pregcache[i].cached)
 			regfree(&pregcache[i].preg);
+
+	ifrename();
 
 	return 0;
 }
@@ -385,4 +394,43 @@ populatedev(const char *path)
 			dohotplug();
 		free(cwd);
 	}
+}
+
+static int
+ifrename(void)
+{
+	struct ifaddrs *ifas, *ifa;
+	struct ifreq ifr;
+	int sd;
+	int i;
+	int r;
+
+	sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (sd < 0)
+		eprintf("socket:");
+	r = getifaddrs(&ifas);
+	if (r < 0)
+		eprintf("getifaddrs:");
+	for (ifa = ifas; ifa; ifa = ifa->ifa_next) {
+		if (ifa->ifa_flags & IFF_LOOPBACK)
+			continue;
+		if (ifa->ifa_addr->sa_family == AF_PACKET) {
+			struct sockaddr_ll *sa = (struct sockaddr_ll *)ifa->ifa_addr;
+			for (i = 0; mac2names[i].name; i++) {
+				if (memcmp(mac2names[i].mac, sa->sll_addr, 6) != 0)
+					continue;
+				memset(&ifr, 0, sizeof(ifr));
+				strlcpy(ifr.ifr_name,
+					ifa->ifa_name, sizeof(ifr.ifr_name));
+				strlcpy(ifr.ifr_newname,
+					mac2names[i].name, sizeof(ifr.ifr_newname));
+				r = ioctl(sd, SIOCSIFNAME, &ifr);
+				if (r < 0)
+					eprintf("SIOCSIFNAME:");
+			}
+		}
+	}
+
+	close(sd);
+	return 0;
 }
