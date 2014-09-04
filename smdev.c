@@ -399,6 +399,7 @@ populatedev(const char *path)
 static void
 ifrename(void)
 {
+	struct sockaddr_ll *sa;
 	struct ifaddrs *ifas, *ifa;
 	struct ifreq ifr;
 	int sd;
@@ -414,20 +415,20 @@ ifrename(void)
 	for (ifa = ifas; ifa; ifa = ifa->ifa_next) {
 		if (ifa->ifa_flags & IFF_LOOPBACK)
 			continue;
-		if (ifa->ifa_addr->sa_family == AF_PACKET) {
-			struct sockaddr_ll *sa = (struct sockaddr_ll *)ifa->ifa_addr;
-			for (i = 0; mac2names[i].name; i++) {
-				if (memcmp(mac2names[i].mac, sa->sll_addr, 6) != 0)
-					continue;
-				memset(&ifr, 0, sizeof(ifr));
-				strlcpy(ifr.ifr_name,
-					ifa->ifa_name, sizeof(ifr.ifr_name));
-				strlcpy(ifr.ifr_newname,
-					mac2names[i].name, sizeof(ifr.ifr_newname));
-				r = ioctl(sd, SIOCSIFNAME, &ifr);
-				if (r < 0)
-					eprintf("SIOCSIFNAME:");
-			}
+		if (ifa->ifa_addr->sa_family != AF_PACKET)
+			continue;
+		sa = (struct sockaddr_ll *)ifa->ifa_addr;
+		for (i = 0; mac2names[i].name; i++) {
+			if (memcmp(mac2names[i].mac, sa->sll_addr, 6) != 0)
+				continue;
+			memset(&ifr, 0, sizeof(ifr));
+			strlcpy(ifr.ifr_name,
+				ifa->ifa_name, sizeof(ifr.ifr_name));
+			strlcpy(ifr.ifr_newname,
+				mac2names[i].name, sizeof(ifr.ifr_newname));
+			r = ioctl(sd, SIOCSIFNAME, &ifr);
+			if (r < 0)
+				eprintf("SIOCSIFNAME:");
 		}
 	}
 	freeifaddrs(ifas);
