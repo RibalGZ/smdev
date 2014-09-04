@@ -61,7 +61,7 @@ static int createdev(struct event *ev);
 static int doevent(struct event *ev);
 static int craftev(char *sysfspath);
 static void populatedev(const char *path);
-static void ifrename(void);
+static int ifrename(void);
 
 static void
 usage(void)
@@ -95,9 +95,10 @@ main(int argc, char *argv[])
 		if (pregcache[i].cached)
 			regfree(&pregcache[i].preg);
 
-	ifrename();
+	if (ifrename() < 0)
+		return EXIT_FAILURE;
 
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 static enum action
@@ -396,7 +397,7 @@ populatedev(const char *path)
 	}
 }
 
-static void
+static int
 ifrename(void)
 {
 	struct sockaddr_ll *sa;
@@ -405,6 +406,7 @@ ifrename(void)
 	int sd;
 	int i;
 	int r;
+	int ok = 0;
 
 	sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (sd < 0)
@@ -427,10 +429,13 @@ ifrename(void)
 			strlcpy(ifr.ifr_newname,
 				mac2names[i].name, sizeof(ifr.ifr_newname));
 			r = ioctl(sd, SIOCSIFNAME, &ifr);
-			if (r < 0)
+			if (r < 0) {
 				weprintf("SIOCSIFNAME:");
+				ok = -1;
+			}
 		}
 	}
 	freeifaddrs(ifas);
 	close(sd);
+	return ok;
 }
