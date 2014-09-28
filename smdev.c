@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <linux/sockios.h>
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <netinet/in.h>
