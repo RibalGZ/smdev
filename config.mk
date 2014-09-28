@@ -8,4 +8,4 @@ PREFIX = /usr/local
 LD = $(CC)
 CPPFLAGS = -D_BSD_SOURCE -D_GNU_SOURCE
 CFLAGS   = -std=c99 -Wall -pedantic $(CPPFLAGS)
-LDFLAGS  =
+LDFLAGS  = -s
