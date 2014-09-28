@@ -53,15 +53,14 @@ struct rulepath {
 };
 
 static int dohotplug(void);
-static int matchrule(int ruleidx, char *devname);
-static void runrulecmd(struct rule *rule);
-static void parsepath(struct rule *rule, struct rulepath *rpath,
-		      const char *devname);
-static int removedev(struct event *ev);
-static int createdev(struct event *ev);
-static int doevent(struct event *ev);
-static int craftev(char *sysfspath);
-static void populatedev(const char *path);
+static int matchrule(int, char *);
+static void runrulecmd(struct rule *);
+static void parsepath(struct rule *, struct rulepath *, const char *);
+static int removedev(struct event *);
+static int createdev(struct event *);
+static int doevent(struct event *);
+static int craftev(char *);
+static void populatedev(const char *);
 static int ifrename(void);
 
 static void
