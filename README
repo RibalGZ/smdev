@@ -11,7 +11,7 @@ You need to have the kernel headers available on your
 system to build smdev.
 
 To build a statically linked smdev against musl-libc[0]
-install the cross-compilers[1], then install the kernel
+install the relevant cross-compiler[1], then install the kernel
 headers into your cross-compiler prefix and finally run
 the following:
 
